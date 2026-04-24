@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
 import { ScrollView, View, Text, TextInput, TouchableOpacity } from 'react-native';
-import { Camera, Calendar as CalendarIcon } from 'lucide-react-native';
+import { Camera, Calendar as CalendarIcon, User } from 'lucide-react-native';
 
 export default function Settings() {
   return (
@@ -15,7 +15,7 @@ export default function Settings() {
         <View className="flex-row items-center">
           <View className="relative mr-6">
             <View className="w-20 h-20 bg-red-100 rounded-full items-center justify-center">
-               <Text className="text-3xl">🧑🏼‍🦳</Text>
+               <User size={40} color="#DC2626" />
             </View>
             <View className="absolute bottom-0 right-0 bg-white p-1.5 rounded-full border border-gray-200 shadow-sm">
               <Camera size={14} color="#6B7280" />

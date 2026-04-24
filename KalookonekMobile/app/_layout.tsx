@@ -45,6 +45,9 @@ export default function RootLayout() {
       <Stack.Screen name="announcement" options={{ title: 'Announcement', headerBackTitle: 'Back' }} />
       <Stack.Screen name="checkup-details" options={{ title: 'Checkup Details', headerBackTitle: 'Back' }} />
       <Stack.Screen name="refill" options={{ title: 'Request Refill', headerBackTitle: 'Back' }} />
+
+      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="register" options={{ headerShown: false }} />
     </Stack>
   );
 }

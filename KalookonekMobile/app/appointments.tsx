@@ -1,15 +1,20 @@
 /// <reference types="nativewind/types" />
 import { ScrollView, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Calendar as CalendarIcon, Trash2 } from 'lucide-react-native';
+import { useUserStore } from '../store/useUserStore'; // Adjust path if needed
 
 export default function Appointments() {
+  
+  // Pull the dashboard data from the store
+  const { dashboard } = useUserStore();
+
   return (
     <ScrollView className="flex-1 bg-[#F8F9FA] p-5">
       <Text className="text-gray-500 text-sm mb-6 leading-relaxed">
         Schedule your next visit to the Health Center.
       </Text>
 
-      {/* Booking Form Card */}
+      {/* Booking Form Card (Kept intact for user input) */}
       <View className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mb-8">
         <Text className="font-bold text-gray-900 text-lg mb-6">Book New Appointment</Text>
         
@@ -43,22 +48,21 @@ export default function Appointments() {
         </TouchableOpacity>
       </View>
 
-      {/* Upcoming Schedule */}
+      {/* Upcoming Schedule (Dynamically Mapped) */}
       <Text className="font-bold text-gray-900 text-lg mb-4">Upcoming Schedule</Text>
-      <View className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex-row items-center gap-5">
-        <View className="bg-gray-50 rounded-2xl px-4 py-3 items-center justify-center border border-gray-100">
-          <Text className="text-xs font-bold text-gray-400 uppercase tracking-widest">DEC</Text>
-          <Text className="text-2xl font-black text-gray-900 mt-1">20</Text>
+      
+      {!dashboard?.upcoming_appointments || dashboard.upcoming_appointments.length === 0 ? (
+        <View className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 items-center justify-center">
+          <Text className="text-gray-400 italic">-- No upcoming appointments --</Text>
         </View>
-        <View className="flex-1">
-          <Text className="font-bold text-gray-900 text-base mb-1">Dental Checkup</Text>
-          <Text className="text-xs text-gray-500 mb-2">Barangay Health Center, Room 2</Text>
-          <Text className="text-xs font-bold text-red-600">9:00 AM - 10:00 AM</Text>
-        </View>
-        <TouchableOpacity className="p-3">
-          <Trash2 size={20} color="#9CA3AF" />
-        </TouchableOpacity>
-      </View>
+      ) : (
+        dashboard.upcoming_appointments.map((appt: any, index: number) => (
+          <View key={index} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex-row items-center gap-5 mb-3">
+             <Text className="font-bold text-gray-900">{appt.details}</Text>
+          </View>
+        ))
+      )}
+      
       <View className="h-10" />
     </ScrollView>
   );

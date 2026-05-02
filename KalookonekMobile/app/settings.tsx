@@ -4,12 +4,15 @@ import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LogOut, User, Bell, Shield, ChevronRight } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
+// 1. Import our store!
+import { useUserStore } from '../store/useUserStore';
 
 export default function Settings() {
   const router = useRouter();
+  // 2. Extract the clearUser function
+  const { clearUser } = useUserStore();
 
   const handleLogout = async () => {
-    // Add a confirmation pop-up so senior citizens don't accidentally log out
     Alert.alert(
       "Sign Out",
       "Are you sure you want to sign out of KalooKonek?",
@@ -19,7 +22,10 @@ export default function Settings() {
           text: "Sign Out", 
           style: "destructive",
           onPress: async () => {
-            // Destroy the session and route to login!
+            // 3. Wipe the local cache BEFORE signing out!
+            clearUser();
+            
+            // Destroy the session and route to login
             await supabase.auth.signOut();
             router.replace('/login');
           }
@@ -28,8 +34,9 @@ export default function Settings() {
     );
   };
 
-  const MenuItem = ({ icon: Icon, label }: { icon: any, label: string }) => (
-    <TouchableOpacity className="flex-row items-center justify-between py-4 border-b border-gray-100">
+  // 4. Added an 'onPress' property to the MenuItem component
+  const MenuItem = ({ icon: Icon, label, onPress }: { icon: any, label: string, onPress?: () => void }) => (
+    <TouchableOpacity onPress={onPress} className="flex-row items-center justify-between py-4 border-b border-gray-100">
       <View className="flex-row items-center">
         <View className="bg-gray-50 p-2 rounded-lg mr-3">
           <Icon size={20} color="#4B5563" />
@@ -45,7 +52,12 @@ export default function Settings() {
       
       {/* Settings Menu Card */}
       <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-6 shadow-sm border border-gray-100">
-        <MenuItem icon={User} label="Personal Information" />
+        {/* 5. Wire up the Personal Information routing */}
+        <MenuItem 
+          icon={User} 
+          label="Personal Information" 
+          onPress={() => router.push('/personal-info')} 
+        />
         <MenuItem icon={Bell} label="Notifications" />
         <MenuItem icon={Shield} label="Privacy & Security" />
       </View>

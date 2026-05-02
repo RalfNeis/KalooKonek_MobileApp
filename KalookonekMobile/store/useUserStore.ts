@@ -30,8 +30,9 @@ interface UserData {
 interface DashboardData {
   display_id: string;
   name: string;
-  upcoming_appointments: any[];
-  recent_records: any[];
+  upcoming_appointments?: any[]; // Added the ? here for safety!
+  recent_records?: any[];        // Added the ? here for safety!
+  medicines?: any[];             // Moved this OUTSIDE of announcements!
   announcements: {
     id: number;
     title: string;

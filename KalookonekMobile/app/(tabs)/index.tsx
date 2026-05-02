@@ -135,7 +135,7 @@ export default function Dashboard() {
           >
             <View className={`${act.bg} p-3 rounded-xl`}><act.icon size={24} color={act.color} /></View>
             <View className="flex-1">
-              <Text className="font-bold text-gray-900 text-sm">{act.label}</Text>
+              <Text className="font-bold text-gray-900 text-sm" numberOfLines={act.label === 'Health Records' ? 2 : 1} adjustsFontSizeToFit>{act.label}</Text>
               <Text className="text-[10px] text-gray-500 mt-0.5">{act.desc}</Text>
             </View>
           </TouchableOpacity>

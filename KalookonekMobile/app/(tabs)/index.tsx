@@ -14,7 +14,8 @@ export default function Dashboard() {
   
   // Pull state from our Zustand store
   const { user, dashboard, fetchUserFromDjango, fetchDashboardFromDjango, isLoading } = useUserStore();
-
+  const firstName = user?.first_name || 'Citizen';
+  
   useEffect(() => {
     // Check Supabase safely AFTER the dashboard component mounts
     const initDashboard = async () => {
@@ -36,8 +37,9 @@ export default function Dashboard() {
     const networkState = await Network.getNetworkStateAsync();
     setIsOffline(!networkState.isConnected);
 
-    // ONLY fetch if we have an active network AND we are logged in
-    if (networkState.isConnected && user) {
+    // Fetch as long as we have an internet connection!
+    // (The useEffect already proved we have a Supabase session)
+    if (networkState.isConnected) {
       await fetchUserFromDjango();
       await fetchDashboardFromDjango();
     }
@@ -73,51 +75,55 @@ export default function Dashboard() {
       {/* Greeting Section */}
       <View className="mb-6">
         <Text className="text-3xl font-bold text-gray-900">
-          Mabuhay, <Text className="text-red-600">{user ? user.first_name : 'Citizen'}!</Text>
+          Mabuhay, <Text className="text-red-600">{firstName}!</Text>
         </Text>
-        <Text className="text-gray-500 mt-2 text-sm leading-relaxed">
-          Welcome to your official Barangay portal. Access your benefits, view announcements, and manage your health records here.
-        </Text>
-      </View>
+      <Text className="text-gray-500 mt-2 text-sm leading-relaxed">
+        Welcome to your official Barangay portal. Access your benefits, view announcements, and manage your health records here.
+      </Text>
+        </View>
 
       {/* Digital ID Card */}
-      <View className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
-        <View className="bg-red-600 p-4 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
-            <View className="bg-white/20 p-2 rounded-xl"><ShieldAlert size={20} color="white" /></View>
-            <View>
-              <Text className="text-[10px] uppercase tracking-wider font-bold text-white/90">Senior Citizen ID</Text>
-              <Text className="font-medium text-sm text-white">Caloocan City</Text>
-            </View>
-          </View>
-        </View>
-        
-        <View className="p-6 items-center">
-          <View className="w-20 h-20 rounded-full bg-orange-100 items-center justify-center mb-4">
-             <User size={40} color="#DC2626" />
-          </View>
-          
-          {user ? (
-            <>
-              <Text className="text-xl font-bold text-gray-900">{user.first_name} {user.last_name}</Text>
-              <Text className="text-red-600 font-bold text-sm mt-1">ID: {user.display_id}</Text>
-              <Text className="text-xs text-gray-500 mt-2 mb-6 text-center">{user.patient_info?.address || 'No address on file'}</Text>
-            </>
-          ) : (
-            <Text className="text-gray-400 mb-6 mt-2">Please log in to view ID</Text>
-          )}
-          
-          <TouchableOpacity 
-            onPress={() => router.push('/qrcode')}
-            className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-5 items-center justify-center"
-          >
-            <QrCode size={36} color="#1F2937" />
-            <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">
-              Tap to Scan Verification
-            </Text>
-          </TouchableOpacity>
-        </View>
+<View className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden mb-8">
+  <View className="bg-red-600 p-4 flex-row items-center justify-between">
+    <View className="flex-row items-center gap-3">
+      <View className="bg-white/20 p-2 rounded-xl"><ShieldAlert size={20} color="white" /></View>
+      <View>
+        <Text className="text-[10px] uppercase tracking-wider font-bold text-white/90">Senior Citizen ID</Text>
+        <Text className="font-medium text-sm text-white">Caloocan City</Text>
       </View>
+    </View>
+  </View>
+  
+  <View className="p-6 items-center">
+    <View className="w-20 h-20 rounded-full bg-orange-100 items-center justify-center mb-4">
+       <User size={40} color="#DC2626" />
+    </View>
+    
+    {isLoading ? (
+      <ActivityIndicator color="#DC2626" className="mb-6" />
+    ) : user ? (
+      <>
+        <Text className="text-xl font-bold text-gray-900">{user.first_name} {user.last_name}</Text>
+        <Text className="text-red-600 font-bold text-sm mt-1">ID: {user.display_id || user.osca_id}</Text>
+        <Text className="text-xs text-gray-500 mt-2 mb-6 text-center">
+          {user.patient_info?.address || 'Caloocan City, Philippines'}
+        </Text>
+      </>
+    ) : (
+      <Text className="text-gray-400 mb-6 mt-2">Please log in to view ID</Text>
+    )}
+    
+    <TouchableOpacity 
+      onPress={() => router.push('/qrcode')}
+      className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-5 items-center justify-center"
+    >
+      <QrCode size={36} color="#1F2937" />
+      <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">
+        Tap to Scan Verification
+      </Text>
+    </TouchableOpacity>
+  </View>
+</View>
 
       {/* Quick Actions Grid */}
       <View className="flex-row flex-wrap justify-between mb-8">

@@ -23,6 +23,7 @@ interface UserData {
   email: string;
   role: string;
   phone_number: string;
+  osca_id?: string;
   patient_info: PatientInfo | null;
 }
 

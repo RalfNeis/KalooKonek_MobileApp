@@ -1,8 +1,12 @@
 /// <reference types="nativewind/types" />
 import { ScrollView, View, Text, TouchableOpacity } from 'react-native';
 import { ShieldAlert, QrCode, Download } from 'lucide-react-native';
+import { useUserStore } from '../store/useUserStore';
 
 export default function QRCodeScreen() {
+  // Pull the logged-in user data from the store
+  const { user } = useUserStore();
+
   return (
     <ScrollView className="flex-1 bg-[#F8F9FA] p-5">
       <Text className="text-gray-500 text-sm mb-8 leading-relaxed">
@@ -27,10 +31,15 @@ export default function QRCodeScreen() {
             <QrCode size={160} color="#1F2937" />
           </View>
           
-          <Text className="text-2xl font-bold text-gray-900 mb-2">Raphael Nikko Espiritu</Text>
-          <Text className="text-red-600 font-bold text-base mb-3">ID: 2025-001</Text>
+          {/* Dynamic User Data */}
+          <Text className="text-2xl font-bold text-gray-900 mb-2">
+            {user ? `${user.first_name} ${user.last_name}` : '--'}
+          </Text>
+          <Text className="text-red-600 font-bold text-base mb-3">
+            ID: {user?.display_id || '--'}
+          </Text>
           <Text className="text-xs text-gray-500 text-center mb-6">
-            📍 Brgy. 172, Caloocan City
+            📍 {user?.patient_info?.barangay ? `Brgy. ${user.patient_info.barangay}, Caloocan City` : '--'}
           </Text>
 
           {/* Fixed Android NativeWind gap bug by using ml-2 on Text instead of gap-2 on wrapper */}

@@ -50,16 +50,23 @@ export default function Settings() {
   return (
     <View className="flex-1 bg-[#F8F9FA] p-4">
       
-      {/* Settings Menu Card */}
+{/* Settings Menu Card */}
       <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-6 shadow-sm border border-gray-100">
-        {/* 5. Wire up the Personal Information routing */}
         <MenuItem 
           icon={User} 
           label="Personal Information" 
           onPress={() => router.push('/personal-info')} 
         />
-        <MenuItem icon={Bell} label="Notifications" />
-        <MenuItem icon={Shield} label="Privacy & Security" />
+        <MenuItem 
+          icon={Bell} 
+          label="Notifications" 
+          onPress={() => router.push('/notifications')} 
+        />
+        <MenuItem 
+          icon={Shield} 
+          label="Privacy & Security" 
+          onPress={() => router.push('/security')} 
+        />
       </View>
 
       {/* Official Logout Button */}

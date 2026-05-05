@@ -160,7 +160,7 @@ export default function Dashboard() {
              <Text className="text-gray-400">No announcements at this time.</Text>
            </View>
         ) : (
-          dashboard.announcements.map((ann) => (
+          dashboard.announcements.slice(0, 2).map((ann) => (
             <TouchableOpacity 
               key={ann.id} 
               onPress={() => router.push('/announcement')}

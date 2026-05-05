@@ -30,9 +30,9 @@ interface UserData {
 interface DashboardData {
   display_id: string;
   name: string;
-  upcoming_appointments?: any[]; // Added the ? here for safety!
-  recent_records?: any[];        // Added the ? here for safety!
-  medicines?: any[];             // Moved this OUTSIDE of announcements!
+  upcoming_appointments?: any[]; 
+  recent_records?: any[];        
+  medicines?: any[];             
   announcements: {
     id: number;
     title: string;
@@ -41,13 +41,20 @@ interface DashboardData {
   }[];
 }
 
+// 1. Updated UserState to include our new accessibility properties
 interface UserState {
   user: UserData | null;
   dashboard: DashboardData | null;
   isLoading: boolean;
   lastUpdated: string | null;
+  
+  language: 'en' | 'tl';
+  textScale: number;
+  
   fetchUserFromDjango: () => Promise<void>;
   fetchDashboardFromDjango: () => Promise<void>;
+  setLanguage: (lang: 'en' | 'tl') => void;
+  setTextScale: (scale: number) => void;
   clearUser: () => void;
 }
 
@@ -58,6 +65,10 @@ export const useUserStore = create<UserState>()(
       dashboard: null,
       isLoading: false,
       lastUpdated: null,
+      
+      // 2. Added default values for accessibility
+      language: 'en',
+      textScale: 1,
 
       fetchUserFromDjango: async () => {
         set({ isLoading: true });
@@ -81,6 +92,11 @@ export const useUserStore = create<UserState>()(
         }
       },
 
+      // 3. Added the setter functions so components can update the store
+      setLanguage: (lang) => set({ language: lang }),
+      setTextScale: (scale) => set({ textScale: scale }),
+
+      // 4. clearUser only wipes sensitive session data, keeping accessibility preferences intact
       clearUser: () => set({ user: null, dashboard: null, lastUpdated: null }),
     }),
     {

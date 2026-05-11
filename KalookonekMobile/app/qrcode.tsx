@@ -1,50 +1,49 @@
 /// <reference types="nativewind/types" />
-import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { ScrollView, View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { ShieldAlert, Download, ShieldCheck, Clock } from 'lucide-react-native';
-import { useUserStore } from '../store/useUserStore';
-
-// --- NEW IMPORTS ---
+import { ShieldAlert, Download, ShieldCheck, Clock, RefreshCw, Lock, MapPin } from 'lucide-react-native';
+import { captureRef } from 'react-native-view-shot';
+import * as MediaLibrary from 'expo-media-library';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Brightness from 'expo-brightness';
+import { useUserStore } from '../store/useUserStore';
 
 export default function QRCodeScreen() {
   const { user } = useUserStore();
-
-  // 1. Prevent the screen from going to sleep while this component is open!
-  useKeepAwake();
-
-  const [qrMode, setQrMode] = useState<'basic' | 'secure'>('basic');
-  const [timeLeft, setTimeLeft] = useState(300);
-  const [secureSessionId, setSecureSessionId] = useState(Date.now().toString());
+  const [activeTab, setActiveTab] = useState<'basic' | 'medical'>('basic');
   
-  // State to remember the user's original screen brightness
+  // Security & Download State
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [secureToken, setSecureToken] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  // Brightness State
   const [originalBrightness, setOriginalBrightness] = useState<number | null>(null);
 
-  // 2. Handle Auto-Brightness when the component mounts
+  const qrCardRef = useRef(null);
+
+  // 1. Prevent screen from going to sleep
+  useKeepAwake();
+
+  // 2. Handle Auto-Brightness
   useEffect(() => {
     let isMounted = true;
-
     const setupBrightness = async () => {
       try {
         const { status } = await Brightness.requestPermissionsAsync();
         if (status === 'granted') {
-          // Save their current brightness so we can restore it later
           const current = await Brightness.getBrightnessAsync();
           if (isMounted) setOriginalBrightness(current);
-          
-          // Push brightness to 100% for the scanner!
           await Brightness.setBrightnessAsync(1.0);
         }
       } catch (error) {
         console.log("Brightness adjustment not supported on this device/simulator.");
       }
     };
-
     setupBrightness();
 
-    // 3. CLEANUP: Restore original brightness when they leave the tab!
     return () => {
       isMounted = false;
       const restoreBrightness = async () => {
@@ -60,31 +59,67 @@ export default function QRCodeScreen() {
     };
   }, [originalBrightness]);
 
-  // Handle the countdown timer for Secure Mode
+  // 3. Handle the countdown timer
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    
-    if (qrMode === 'secure') {
-      timer = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            setSecureSessionId(Date.now().toString());
-            return 300; 
-          }
-          return prev - 1;
-        });
+    let interval: ReturnType<typeof setInterval>;
+    if (timeLeft > 0 && secureToken) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
       }, 1000);
-    } else {
-      setTimeLeft(300);
+    } else if (timeLeft === 0 && secureToken) {
+      setSecureToken(null);
     }
-
-    return () => clearInterval(timer);
-  }, [qrMode]);
+    return () => clearInterval(interval);
+  }, [timeLeft, secureToken]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleGenerateSecureQR = async () => {
+    setIsGenerating(true);
+    try {
+      const displayId = user?.display_id || user?.osca_id || 'PENDING';
+      const mockJWT = `MED-${displayId}-${Date.now()}-SECURE`;
+      setSecureToken(mockJWT);
+      setTimeLeft(300); // 5 minutes
+    } catch (error) {
+      Alert.alert('Error', 'Could not generate secure token.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if ((activeTab === 'medical' && !secureToken)) {
+      Alert.alert('Error', 'Please generate the secure QR code first.');
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'We need access to your gallery to save the ID.');
+        setIsDownloading(false);
+        return;
+      }
+
+      const localUri = await captureRef(qrCardRef, {
+        format: 'png',
+        quality: 1,
+      });
+
+      await MediaLibrary.saveToLibraryAsync(localUri);
+      Alert.alert('Success', 'Digital ID successfully saved to your photo gallery!');
+    } catch (error: any) {
+      Alert.alert('System Error', error?.message || String(error));
+      console.error(error);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (!user) {
@@ -95,27 +130,10 @@ export default function QRCodeScreen() {
     );
   }
 
-  // The Basic payload is permanent
-  const basicPayload = JSON.stringify({
-    type: 'BASIC_ID',
-    id: user.display_id || user.osca_id,
-    name: `${user.first_name} ${user.last_name}`,
-  });
-
-  // The Secure payload attaches a timestamp and sensitive data
-  // (NOTE: See Part 2 below on how backend devs will replace this with a JWT)
-  const securePayload = JSON.stringify({
-    type: 'SECURE_MEDICAL',
-    id: user.display_id || user.osca_id,
-    session_id: secureSessionId,
-    data: {
-      blood_type: user.patient_info?.blood_type,
-      allergies: user.patient_info?.allergies,
-      emergency_contact: user.patient_info?.emergency_contact_number
-    }
-  });
-
-  const currentPayload = qrMode === 'basic' ? basicPayload : securePayload;
+  const displayName = `${user.first_name} ${user.last_name}`;
+  const displayId = user.display_id || user.osca_id || 'PENDING';
+  const location = user.patient_info?.barangay ? `Brgy. ${user.patient_info.barangay}, Caloocan City` : 'Caloocan City';
+  const basicQRValue = JSON.stringify({ type: 'basic', id: displayId });
 
   return (
     <ScrollView className="flex-1 bg-[#F8F9FA] p-5">
@@ -123,81 +141,132 @@ export default function QRCodeScreen() {
         Present this QR code to government personnel for quick verification.
       </Text>
 
-      {/* Mode Toggle */}
-      <View className="flex-row bg-gray-200 p-1 rounded-xl w-full mb-6">
+      {/* Tab Switcher */}
+      <View className="flex-row bg-gray-200 rounded-xl p-1 mb-6 w-full">
         <TouchableOpacity 
-          onPress={() => setQrMode('basic')}
-          className={`flex-1 py-3 rounded-lg items-center flex-row justify-center ${qrMode === 'basic' ? 'bg-white shadow-sm' : ''}`}
+          onPress={() => setActiveTab('basic')}
+          className={`flex-1 flex-row items-center justify-center py-3 rounded-lg gap-2 ${activeTab === 'basic' ? 'bg-white shadow-sm' : ''}`}
         >
-          <ShieldCheck size={16} color={qrMode === 'basic' ? '#10B981' : '#6B7280'} className="mr-2" />
-          <Text className={`font-bold ${qrMode === 'basic' ? 'text-gray-900' : 'text-gray-500'}`}>Basic ID</Text>
+          <ShieldCheck size={16} color={activeTab === 'basic' ? '#10B981' : '#9CA3AF'} />
+          <Text className={`font-bold text-sm ${activeTab === 'basic' ? 'text-gray-900' : 'text-gray-400'}`}>Basic ID</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
-          onPress={() => {
-            if (qrMode !== 'secure') {
-              Alert.alert('Secure Mode', 'This code contains sensitive medical data and will expire in 5 minutes.');
-              setQrMode('secure');
-            }
-          }}
-          className={`flex-1 py-3 rounded-lg items-center flex-row justify-center ${qrMode === 'secure' ? 'bg-white shadow-sm' : ''}`}
+          onPress={() => setActiveTab('medical')}
+          className={`flex-1 flex-row items-center justify-center py-3 rounded-lg gap-2 ${activeTab === 'medical' ? 'bg-white shadow-sm' : ''}`}
         >
-          <ShieldAlert size={16} color={qrMode === 'secure' ? '#DC2626' : '#6B7280'} className="mr-2" />
-          <Text className={`font-bold ${qrMode === 'secure' ? 'text-gray-900' : 'text-gray-500'}`}>Full Medical</Text>
+          <ShieldAlert size={16} color={activeTab === 'medical' ? '#DC2626' : '#9CA3AF'} />
+          <Text className={`font-bold text-sm ${activeTab === 'medical' ? 'text-gray-900' : 'text-gray-400'}`}>Full Medical</Text>
         </TouchableOpacity>
       </View>
 
-      {/* ID Card Wrapper */}
-      <View className={`bg-white rounded-[32px] shadow-sm overflow-hidden mb-8 border ${qrMode === 'secure' ? 'border-red-300' : 'border-gray-100'}`}>
+      {/* The Card we will screenshot */}
+      <View 
+        ref={qrCardRef} 
+        collapsable={false}
+        className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden mb-6"
+      >
         
-        {/* Red Header */}
-        <View className={`${qrMode === 'secure' ? 'bg-red-700' : 'bg-red-600'} p-5 flex-row items-center gap-3`}>
+        {/* Red Card Header */}
+        <View className={`p-5 flex-row items-center gap-3 ${activeTab === 'medical' ? 'bg-red-700' : 'bg-red-600'}`}>
           <View className="bg-white/20 p-2 rounded-xl">
-            <ShieldAlert size={20} color="white" />
+            {activeTab === 'medical' ? <Lock size={20} color="white" /> : <ShieldAlert size={20} color="white" />}
           </View>
           <View>
-            <Text className="text-[10px] uppercase tracking-wider font-bold text-white/90">
-              {qrMode === 'secure' ? 'SECURE MEDICAL ID' : 'Senior Citizen ID'}
+            <Text className="text-[10px] uppercase tracking-widest font-bold text-white/90">
+              {activeTab === 'medical' ? 'SECURE MEDICAL ACCESS' : 'SENIOR CITIZEN ID'}
             </Text>
-            <Text className="font-medium text-base text-white">Caloocan City</Text>
+            <Text className="font-bold text-base text-white">Caloocan City</Text>
           </View>
         </View>
-        
-        {/* ID Body */}
-        <View className="p-8 items-center">
+
+        {/* QR Code Area */}
+        <View className="px-6 py-8 items-center w-full">
           
-          <View className="bg-white p-4 rounded-3xl border border-gray-100 mb-6 w-full items-center justify-center shadow-sm">
-            <QRCode
-              value={currentPayload}
-              size={180}
-              color={qrMode === 'secure' ? '#DC2626' : '#1F2937'} 
-              backgroundColor="white"
-            />
-          </View>
-          
-          {qrMode === 'secure' && (
-            <View className="bg-red-50 px-4 py-2 rounded-xl flex-row items-center mb-6 border border-red-100">
-              <Clock size={16} color="#DC2626" className="mr-2" />
-              <Text className="text-red-700 font-bold">Expires in {formatTime(timeLeft)}</Text>
+          {activeTab === 'medical' && !secureToken ? (
+            // State 1: Medical Tab, needs generation
+            <View className="w-64 h-64 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 items-center justify-center px-4">
+              <Lock size={36} color="#9CA3AF" className="mb-3" />
+              <Text className="text-gray-500 text-center text-sm font-medium mb-6 px-2">
+                Medical data requires a one-time secure token.
+              </Text>
+              <TouchableOpacity 
+                onPress={handleGenerateSecureQR}
+                disabled={isGenerating}
+                className="bg-red-600 px-5 py-3 rounded-xl flex-row items-center justify-center"
+              >
+                {isGenerating ? (
+                  <ActivityIndicator color="white" size="small"/>
+                ) : (
+                  <View className="flex-row items-center justify-center gap-2">
+                    <RefreshCw size={16} color="white" />
+                    <Text className="text-white font-bold text-sm">Generate Token</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // State 2: Basic QR or Generated Medical QR
+            <View className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm items-center justify-center w-56 h-56">
+              <QRCode
+                value={activeTab === 'medical' ? secureToken! : basicQRValue}
+                size={180}
+                color={activeTab === 'medical' ? '#DC2626' : '#1F2937'}
+                backgroundColor="white"
+              />
             </View>
           )}
-          
-          <Text className="text-2xl font-bold text-gray-900 mb-2 text-center">
-            {user.first_name} {user.last_name}
-          </Text>
-          <Text className={`${qrMode === 'secure' ? 'text-red-600' : 'text-emerald-600'} font-bold text-base mb-3`}>
-            ID: {user.display_id || user.osca_id || '--'}
-          </Text>
-          <Text className="text-xs text-gray-500 text-center mb-6">
-            📍 {user.patient_info?.barangay ? `Brgy. ${user.patient_info.barangay}, Caloocan City` : 'Caloocan City'}
-          </Text>
 
-          <TouchableOpacity className="w-full bg-red-50 border border-red-100 rounded-2xl py-4 flex-row items-center justify-center">
-            <Download size={18} color="#DC2626" />
-            <Text className="text-red-600 font-bold text-sm ml-2">Download Digital Copy</Text>
-          </TouchableOpacity>
+          {/* Patient Info */}
+          <View className="items-center mt-6 w-full">
+            <Text className="text-xl font-bold text-gray-900 text-center">{displayName}</Text>
+            
+            <Text className={`font-bold text-sm mt-1 text-center ${activeTab === 'medical' ? 'text-red-600' : 'text-emerald-600'}`}>
+              ID: {displayId}
+            </Text>
+            
+            <View className="flex-row items-center justify-center mt-2 mb-2">
+              <MapPin size={12} color="#9CA3AF" />
+              <Text className="text-xs text-gray-500 font-medium ml-1 text-center">{location}</Text>
+            </View>
+
+            {/* Medical Timer Display */}
+            {activeTab === 'medical' && secureToken && (
+              <View className="bg-red-50 px-5 py-2.5 rounded-full border border-red-100 mt-3 flex-row items-center justify-center">
+                <Clock size={14} color="#DC2626" />
+                <Text className="text-red-700 font-bold text-xs uppercase tracking-wider ml-2">
+                  Expires in {formatTime(timeLeft)}
+                </Text>
+              </View>
+            )}
+          </View>
+
         </View>
       </View>
+
+      {/* Download Button */}
+      <View className="items-center mb-10 mt-2">
+        <TouchableOpacity 
+          onPress={handleDownload}
+          disabled={isDownloading || (activeTab === 'medical' && !secureToken)}
+          className={`py-3 px-6 rounded-full flex-row items-center justify-center border
+            ${(activeTab === 'medical' && !secureToken) 
+              ? 'bg-gray-50 border-gray-100' 
+              : 'bg-red-50 border-red-100'}`}
+        >
+          {isDownloading ? (
+            <ActivityIndicator color="#DC2626" />
+          ) : (
+            <View className="flex-row items-center gap-2">
+              <Download size={18} color={(activeTab === 'medical' && !secureToken) ? "#9CA3AF" : "#DC2626"} />
+              <Text className={`font-bold text-sm ${(activeTab === 'medical' && !secureToken) ? "text-gray-400" : "text-red-600"}`}>
+                Download Digital Copy
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
     </ScrollView>
   );
 }

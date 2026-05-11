@@ -1,8 +1,7 @@
 import axios from 'axios';
-import { supabase } from '../lib/supabase'; // We import Supabase instead of AsyncStorage
+import { supabase } from '../lib/supabase'; 
 
-// Removed '/api/' so it perfectly matches your Django backend
-const API_URL = 'http://10.0.2.2:8000/'; 
+const API_URL = 'http://10.0.2.2:8000/';
 
 export const apiClient = axios.create({
   baseURL: API_URL,

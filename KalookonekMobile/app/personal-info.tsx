@@ -4,18 +4,24 @@ import { View, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { ArrowLeft, User, Phone, MapPin, Save, Camera } from 'lucide-react-native';
+import { User, Phone, Save, Camera } from 'lucide-react-native';
 import { useUserStore } from '../store/useUserStore';
 import { apiClient } from '../api/client'; 
+import { supabase } from '../lib/supabase';
+import { translations } from '../lib/i18n';
+
+// 3. IMAGE RETRIEVAL: The base URL provided by your backend team
+const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
 
 export default function PersonalInfoScreen() {
   const router = useRouter();
-  const { user, fetchUserFromDjango } = useUserStore();
+  
+  const { user, fetchUserFromDjango, language } = useUserStore();
+  const t = translations[language]; 
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
-  const [barangay, setBarangay] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -23,27 +29,33 @@ export default function PersonalInfoScreen() {
     if (user) {
       setFirstName(user.first_name || '');
       setLastName(user.last_name || '');
-      setPhone(user.phone_number || '');
-      setBarangay(user.patient_info?.barangay || '');
-      // If Django starts sending a profile_picture URL, it will load here!
-      // setProfileImage(user.profile_picture || null); 
+      
+      const existingPhone = user.phone_number || '';
+      const last9Digits = existingPhone.replace(/\D/g, '').slice(-9);
+      setPhone(last9Digits);
+      
+      // Check if Django returned a full URL or just the Supabase path
+      if (user.profile_picture) {
+        if (user.profile_picture.startsWith('http')) {
+          setProfileImage(user.profile_picture);
+        } else {
+          setProfileImage(`${SUPABASE_PIC_URL}${user.profile_picture}`);
+        }
+      }
     }
   }, [user]);
 
-  // --- Image Picker Function ---
   const pickImage = async () => {
-    // Ask for permission to access the photo library
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your photos to change your profile picture.');
+      Alert.alert(t.permissionDenied, t.photoPermissionMsg);
       return;
     }
 
-    // Open the gallery
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1], // Forces a square crop perfect for avatars!
+      aspect: [1, 1], 
       quality: 0.8,
     });
 
@@ -54,47 +66,59 @@ export default function PersonalInfoScreen() {
 
   const handleSave = async () => {
     if (!firstName || !lastName) {
-      Alert.alert('Error', 'First Name and Last Name cannot be empty.');
+      Alert.alert(t.error, t.emptyNameError);
+      return;
+    }
+
+    if (phone.length < 9) {
+      Alert.alert(t.error, language === 'tl' ? 'Mangyaring ilagay ang buong 11-digit mobile number.' : 'Please enter a valid 11-digit mobile number.');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Because we are uploading an image file, we MUST use FormData instead of a standard JSON object
-      const formData = new FormData();
-      formData.append('first_name', firstName);
-      formData.append('last_name', lastName);
-      formData.append('phone_number', phone);
-      // We stringify the nested patient info for the backend to parse
-      formData.append('patient_info', JSON.stringify({
-        ...(user?.patient_info || {}),
-        barangay: barangay
-      }));
-
-      // If the user selected a new image, attach it to the form
+      // --- 1. FILE UPLOAD (FRONTEND TO SUPABASE) ---
       if (profileImage && !profileImage.startsWith('http')) {
-        const filename = profileImage.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename || '');
-        const type = match ? `image/${match[1]}` : `image`;
-        
-        formData.append('profile_picture', {
-          uri: profileImage,
-          name: filename,
-          type,
-        } as any);
+        // Format path as requested: [display_id]/profile.jpg
+        const displayId = user?.display_id || 'unknown';
+        const filePath = `${displayId}/profile.jpg`;
+
+        // Convert the phone's local file to a binary Blob for Supabase
+        const response = await fetch(profileImage);
+        const blob = await response.blob();
+
+        const { error: uploadError } = await supabase.storage
+          .from('profile-pictures')
+          .upload(filePath, blob, { 
+            upsert: true, 
+            contentType: 'image/jpeg' 
+          });
+
+        if (uploadError) throw uploadError;
+
+        // --- 2. DATABASE UPDATE (NEW ENDPOINT) ---
+        await apiClient.put('accounts/profile/update/', {
+          profile_picture: filePath
+        });
       }
 
-      // Send as multipart/form-data
-      await apiClient.put('user/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      // --- SAVE REMAINING TEXT DATA ---
+      // Send the name, phone, and patient info to the standard endpoint as clean JSON
+      await apiClient.put('user/', {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone_number: '09' + phone,
+        patient_info: {
+          ...(user?.patient_info || {})
+        }
       });
 
       await fetchUserFromDjango();
-      Alert.alert('Success', 'Your profile has been updated!');
+      Alert.alert(t.success, t.profileUpdated);
       router.back();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
-      Alert.alert('Error', 'Could not save changes.');
+      Alert.alert(t.error, t.saveError);
     } finally {
       setIsSaving(false);
     }
@@ -103,20 +127,14 @@ export default function PersonalInfoScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 bg-[#F8F9FA]">
       
-      {/* Header */}
       <View className="px-6 pt-6 pb-4 bg-white border-b border-gray-100 shadow-sm z-10 flex-row items-center">
-        <Text className="text-xl font-bold text-gray-900">Personal Information</Text>
+        <Text className="text-xl font-bold text-gray-900">{t.personalInfo}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
         
-        {/* Profile Picture Upload Section */}
         <View className="items-center mb-8">
-          <TouchableOpacity 
-            onPress={pickImage}
-            activeOpacity={0.8}
-            className="relative"
-          >
+          <TouchableOpacity onPress={pickImage} activeOpacity={0.8} className="relative">
             <View className="w-28 h-28 rounded-full bg-orange-100 items-center justify-center overflow-hidden border-4 border-white shadow-sm">
               {profileImage ? (
                 <Image source={{ uri: profileImage }} className="w-full h-full" />
@@ -124,56 +142,49 @@ export default function PersonalInfoScreen() {
                 <User size={50} color="#DC2626" />
               )}
             </View>
-            
-            {/* Camera Icon Badge */}
             <View className="absolute bottom-0 right-0 bg-red-600 w-10 h-10 rounded-full border-4 border-white items-center justify-center shadow-sm">
               <Camera size={16} color="white" />
             </View>
           </TouchableOpacity>
-          <Text className="text-gray-400 text-xs mt-3 font-medium">Tap to change photo</Text>
+          <Text className="text-gray-400 text-xs mt-3 font-medium">{t.tapToChangePhoto}</Text>
         </View>
 
         <View className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm mb-8">
-          {/* First Name */}
           <View className="mb-5">
-            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">First Name</Text>
+            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">{t.firstName}</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
               <User size={20} color="#9CA3AF" className="mr-3" />
-              <TextInput value={firstName} onChangeText={setFirstName} className="flex-1 text-gray-900 font-medium" placeholder="First Name" />
+              <TextInput value={firstName} onChangeText={setFirstName} className="flex-1 text-gray-900 font-medium text-base" placeholder={t.firstName} />
             </View>
           </View>
 
-          {/* Last Name */}
           <View className="mb-5">
-            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">Last Name</Text>
+            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">{t.lastName}</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
               <User size={20} color="#9CA3AF" className="mr-3" />
-              <TextInput value={lastName} onChangeText={setLastName} className="flex-1 text-gray-900 font-medium" placeholder="Last Name" />
+              <TextInput value={lastName} onChangeText={setLastName} className="flex-1 text-gray-900 font-medium text-base" placeholder={t.lastName} />
             </View>
           </View>
 
-          {/* Mobile Number */}
-          <View className="mb-5">
-            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">Mobile Number</Text>
+          <View className="mb-2">
+            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">{t.mobileNumber}</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
               <Phone size={20} color="#9CA3AF" className="mr-3" />
-              <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" className="flex-1 text-gray-900 font-medium" placeholder="09XX-XXX-XXXX" />
-            </View>
-          </View>
-
-          {/* Barangay */}
-          <View className="mb-2">
-            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">Barangay</Text>
-            <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
-              <MapPin size={20} color="#9CA3AF" className="mr-3" />
-              <TextInput value={barangay} onChangeText={setBarangay} className="flex-1 text-gray-900 font-medium" placeholder="e.g. 171" />
+              <Text className="text-gray-900 font-bold text-base mr-1">09</Text>
+              <TextInput 
+                value={phone} 
+                onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))} 
+                keyboardType="number-pad" 
+                maxLength={9} 
+                className="flex-1 text-gray-900 font-medium text-base tracking-widest" 
+                placeholder="XXXXXXXXX" 
+              />
             </View>
           </View>
         </View>
 
-        {/* Save Button */}
         <TouchableOpacity onPress={handleSave} disabled={isSaving} className={`w-full rounded-2xl py-4 flex-row items-center justify-center shadow-sm ${isSaving ? 'bg-red-400' : 'bg-red-600'}`}>
-          {isSaving ? <ActivityIndicator color="white" /> : <><Save size={20} color="white" className="mr-2" /><Text className="text-white font-bold text-lg">Save Changes</Text></>}
+          {isSaving ? <ActivityIndicator color="white" /> : <><Save size={20} color="white" className="mr-2" /><Text className="text-white font-bold text-lg">{t.saveChanges}</Text></>}
         </TouchableOpacity>
 
       </ScrollView>

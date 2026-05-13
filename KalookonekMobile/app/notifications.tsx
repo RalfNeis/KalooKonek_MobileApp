@@ -5,6 +5,7 @@ import { GlobalText as Text } from '../components/GlobalText';
 import { BellRing, Smartphone, Mail } from 'lucide-react-native';
 import { useUserStore } from '../store/useUserStore';
 import { apiClient } from '../api/client';
+import { supabase } from '../lib/supabase';
 import { translations } from '../lib/i18n';
 
 export default function NotificationsScreen() {
@@ -15,7 +16,6 @@ export default function NotificationsScreen() {
   const [smsEnabled, setSmsEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
 
-  // 1. Load existing preferences from the database when the screen opens
   useEffect(() => {
     if (user?.patient_info) {
       setPushEnabled((user.patient_info as any).wants_push ?? true);
@@ -24,15 +24,12 @@ export default function NotificationsScreen() {
     }
   }, [user]);
 
-  // 2. The Optimistic Toggle Logic
   const toggleSetting = async (type: 'push' | 'sms' | 'email', newValue: boolean) => {
-    // Instantly update UI
     if (type === 'push') setPushEnabled(newValue);
     if (type === 'sms') setSmsEnabled(newValue);
     if (type === 'email') setEmailEnabled(newValue);
 
     try {
-      // Package the updated settings
       const updatedPatientInfo = {
         ...(user?.patient_info || {}),
         wants_push: type === 'push' ? newValue : pushEnabled,
@@ -40,16 +37,33 @@ export default function NotificationsScreen() {
         wants_email: type === 'email' ? newValue : emailEnabled,
       };
 
-      // Send to Django
-      await apiClient.put('user/', {
-        patient_info: updatedPatientInfo
+      const { data: { session } } = await supabase.auth.getSession();
+      const baseUrl = apiClient.defaults.baseURL || 'http://10.0.2.2:8000/';
+
+      // We bypass Axios to guarantee the token and JSON body are formatted flawlessly
+      const response = await fetch(`${baseUrl}user/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ patient_info: updatedPatientInfo }),
       });
 
-      // Silently sync the global store
+      if (!response.ok) {
+        // THE ERROR EXTRACTOR: This grabs the exact Python traceback from Django!
+        const errorHtml = await response.text();
+        // Clean up the HTML tags so it's readable on the phone
+        const cleanError = errorHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 250);
+        throw new Error(`Django Crash: ${cleanError}`);
+      }
+
       fetchUserFromDjango();
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('Failed to update notification settings:', error);
-      Alert.alert(t.error || 'Error', t.saveError || 'Could not save changes.');
+      Alert.alert('Backend Error', error.message || 'Could not save changes.');
       
       // Revert the UI if the server request fails
       if (type === 'push') setPushEnabled(!newValue);
@@ -71,7 +85,6 @@ export default function NotificationsScreen() {
 
         <View className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-6">
           
-          {/* Push Notifications */}
           <View className="flex-row items-center justify-between p-5 border-b border-gray-50 min-h-[88px]">
             <View className="flex-row items-center gap-4 flex-1 pr-4">
               <View className="bg-blue-50 p-2 rounded-xl">
@@ -90,7 +103,6 @@ export default function NotificationsScreen() {
             />
           </View>
 
-          {/* SMS Notifications */}
           <View className="flex-row items-center justify-between p-5 border-b border-gray-50 min-h-[88px]">
             <View className="flex-row items-center gap-4 flex-1 pr-4">
               <View className="bg-emerald-50 p-2 rounded-xl">
@@ -109,7 +121,6 @@ export default function NotificationsScreen() {
             />
           </View>
 
-          {/* Email Notifications */}
           <View className="flex-row items-center justify-between p-5 min-h-[88px]">
             <View className="flex-row items-center gap-4 flex-1 pr-4">
               <View className="bg-purple-50 p-2 rounded-xl">

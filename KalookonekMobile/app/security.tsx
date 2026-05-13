@@ -3,11 +3,16 @@ import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Lock, ShieldCheck } from 'lucide-react-native';
+import { Lock, ShieldCheck } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
+import { useUserStore } from '../store/useUserStore';
+import { translations } from '../lib/i18n';
 
 export default function SecurityScreen() {
   const router = useRouter();
+  
+  const { language } = useUserStore();
+  const t = translations[language];
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -15,32 +20,31 @@ export default function SecurityScreen() {
 
   const handleUpdatePassword = async () => {
     if (!newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields.');
+      Alert.alert(t.error || 'Error', t.fillAllFields);
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match.');
+      Alert.alert(t.error || 'Error', t.passwordsDoNotMatch);
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long.');
+      Alert.alert(t.error || 'Error', t.passwordTooShort);
       return;
     }
 
     setIsUpdating(true);
     try {
-      // Supabase natively handles updating the authenticated user's password!
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Your password has been securely updated.', [
+      Alert.alert(t.success || 'Success', t.passwordUpdated, [
         { text: 'OK', onPress: () => router.back() }
       ]);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update password.');
+      Alert.alert(t.error || 'Error', error.message || 'Failed to update password.');
     } finally {
       setIsUpdating(false);
       setNewPassword('');
@@ -50,9 +54,8 @@ export default function SecurityScreen() {
 
   return (
     <View className="flex-1 bg-[#F8F9FA]">
-      {/* Header */}
       <View className="px-6 pt-6 pb-4 flex-row items-center bg-white border-b border-gray-100 shadow-sm z-10">
-        <Text className="text-xl font-bold text-gray-900">Privacy & Security</Text>
+        <Text className="text-xl font-bold text-gray-900">{t.privacySecurity}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24 }}>
@@ -62,12 +65,11 @@ export default function SecurityScreen() {
             <View className="bg-red-50 p-2 rounded-xl">
               <ShieldCheck size={24} color="#DC2626" />
             </View>
-            <Text className="font-bold text-gray-900 text-lg">Change Password</Text>
+            <Text className="font-bold text-gray-900 text-lg flex-wrap flex-1">{t.changePassword}</Text>
           </View>
 
-          {/* New Password Input */}
           <View className="mb-5">
-            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">New Password</Text>
+            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">{t.newPassword}</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
               <Lock size={20} color="#9CA3AF" className="mr-3" />
               <TextInput 
@@ -75,14 +77,13 @@ export default function SecurityScreen() {
                 onChangeText={setNewPassword}
                 secureTextEntry
                 className="flex-1 text-gray-900 font-medium" 
-                placeholder="Enter new password" 
+                placeholder={t.enterNewPassword} 
               />
             </View>
           </View>
 
-          {/* Confirm Password Input */}
           <View className="mb-6">
-            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">Confirm Password</Text>
+            <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">{t.confirmPassword}</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
               <Lock size={20} color="#9CA3AF" className="mr-3" />
               <TextInput 
@@ -90,7 +91,7 @@ export default function SecurityScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry
                 className="flex-1 text-gray-900 font-medium" 
-                placeholder="Confirm new password" 
+                placeholder={t.confirmNewPassword} 
               />
             </View>
           </View>
@@ -103,13 +104,13 @@ export default function SecurityScreen() {
             {isUpdating ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text className="text-white font-bold text-base">Update Password</Text>
+              <Text className="text-white font-bold text-base">{t.updatePassword}</Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <Text className="text-xs text-gray-400 text-center px-4 leading-relaxed mt-2">
-          Your data is encrypted and securely stored. We will never share your personal information without your consent.
+        <Text className="text-xs text-gray-400 text-center px-4 leading-relaxed mt-2 flex-wrap">
+          {t.securityDisclaimer}
         </Text>
 
       </ScrollView>

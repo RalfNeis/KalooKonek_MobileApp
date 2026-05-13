@@ -9,7 +9,7 @@ import { useUserStore } from '../../store/useUserStore';
 import { supabase } from '../../lib/supabase';
 import Skeleton from '../../components/Skeleton'; 
 import { translations } from '../../lib/i18n'; 
-
+const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
 export default function Dashboard() {
   const router = useRouter();
   const [isOffline, setIsOffline] = useState(false);
@@ -103,12 +103,19 @@ export default function Dashboard() {
         <View className="p-6 items-center">
           {/* Ensure Profile Picture shows up! */}
           <View className="w-20 h-20 rounded-full bg-orange-100 items-center justify-center mb-4 overflow-hidden border-2 border-white shadow-sm">
-            {(user as any)?.profile_picture ? (
-              <Image source={{ uri: (user as any).profile_picture }} className="w-full h-full" />
-            ) : (
-              <User size={40} color="#DC2626" />
-            )}
-          </View>
+          {(user as any)?.profile_picture ? (
+            <Image 
+              source={{ 
+                uri: (user as any).profile_picture.startsWith('http') 
+                  ? (user as any).profile_picture 
+                  : `${SUPABASE_PIC_URL}${(user as any).profile_picture}` 
+              }} 
+              className="w-full h-full" 
+            />
+          ) : (
+            <User size={40} color="#DC2626" />
+          )}
+        </View>
           
           {user ? (
             <>

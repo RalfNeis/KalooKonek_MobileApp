@@ -5,7 +5,7 @@ import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { QrCode, User as UserIcon, Lock } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
-import { apiClient } from '../api/client'; // <-- Added to fetch the user role from Django
+import { apiClient } from '../api/client'; 
 
 export default function Login() {
   const router = useRouter();
@@ -21,22 +21,38 @@ export default function Login() {
 
     setIsLoading(true);
 
-    // 1. Authenticate with Supabase first
-    const { error } = await supabase.auth.signInWithPassword({
-      email: seniorId, 
+    // 1. Authenticate with Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: seniorId.trim(), 
       password: password,
     });
 
-    if (error) {
-      Alert.alert('Login Failed', error.message);
+    if (error || !data.session) {
+      Alert.alert('Login Failed', error?.message || 'Could not log in.');
       setIsLoading(false);
-      return; // Stop execution
+      return; 
     } 
 
-    // 2. Fetch the profile from Django to check the role
+    // 2. Fetch the profile from Django using native fetch to bypass Axios completely
     try {
-      const profileResponse = await apiClient.get('accounts/profile/');
-      const userRole = profileResponse.data.user.role;
+      const baseUrl = (apiClient.defaults.baseURL || 'http://10.0.2.2:8000').replace(/\/$/, '');
+
+        const response = await fetch(`${baseUrl}/user/`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${data.session.access_token}`,
+            'Accept': 'application/json'
+          }
+        });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status: ${response.status}`);
+      }
+
+      const profileData = await response.json();
+      
+      // FIX 2: Look for the role in the correct place!
+      const userRole = profileData.role; 
 
       // THE BOUNCER: Block Admins and Staff
       if (userRole === 'admin' || userRole === 'staff') {
@@ -45,7 +61,6 @@ export default function Login() {
           'The mobile app is for senior citizens only. Please log in through the KalooKonek Web Dashboard.'
         );
         
-        // Wipe the session so they aren't secretly logged in
         await supabase.auth.signOut();
         setIsLoading(false);
         return; 
@@ -58,7 +73,6 @@ export default function Login() {
       console.error("Profile check failed:", err);
       Alert.alert('Login Error', 'Could not verify your account role with the server.');
       
-      // Wipe the session if the server check fails just to be safe
       await supabase.auth.signOut();
       setIsLoading(false);
     }

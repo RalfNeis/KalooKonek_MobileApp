@@ -68,6 +68,19 @@ export const translations = {
     smsDesc: 'Receive text messages for urgent updates',
     emailUpdates: 'Email Updates',
     emailDesc: 'Weekly newsletters and detailed reports',
+
+    privacySecurity: 'Privacy & Security',
+    changePassword: 'Change Password',
+    newPassword: 'New Password',
+    enterNewPassword: 'Enter new password',
+    confirmPassword: 'Confirm Password',
+    confirmNewPassword: 'Confirm new password',
+    updatePassword: 'Update Password',
+    passwordsDoNotMatch: 'Passwords do not match.',
+    passwordTooShort: 'Password must be at least 6 characters long.',
+    fillAllFields: 'Please fill in all fields.',
+    passwordUpdated: 'Your password has been securely updated.',
+    securityDisclaimer: 'Your data is encrypted and securely stored. We will never share your personal information without your consent.',
   },
   tl: {
     // Settings
@@ -138,5 +151,18 @@ export const translations = {
     smsDesc: 'Makatanggap ng mga text message para sa mga apurahang update',
     emailUpdates: 'Mga Update sa Email',
     emailDesc: 'Lingguhang newsletter at detalyadong mga ulat',
+
+    privacySecurity: 'Privacy at Seguridad',
+    changePassword: 'Palitan ang Password',
+    newPassword: 'Bagong Password',
+    enterNewPassword: 'Ilagay ang bagong password',
+    confirmPassword: 'Kumpirmahin ang Password',
+    confirmNewPassword: 'Kumpirmahin ang bagong password',
+    updatePassword: 'I-update ang Password',
+    passwordsDoNotMatch: 'Hindi magkatugma ang mga password.',
+    passwordTooShort: 'Ang password ay dapat hindi bababa sa 6 na character.',
+    fillAllFields: 'Mangyaring punan ang lahat ng field.',
+    passwordUpdated: 'Ligtas na na-update ang iyong password.',
+    securityDisclaimer: 'Ang iyong data ay naka-encrypt at ligtas na nakaimbak. Hindi namin kailanman ibabahagi ang iyong personal na impormasyon nang walang iyong pahintulot.',
   }
 };

@@ -10,6 +10,9 @@ import { apiClient } from '../api/client';
 import { supabase } from '../lib/supabase';
 import { translations } from '../lib/i18n';
 
+// 3. IMAGE RETRIEVAL: The base URL provided by your backend team
+const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
+
 export default function PersonalInfoScreen() {
   const router = useRouter();
   
@@ -27,12 +30,18 @@ export default function PersonalInfoScreen() {
       setFirstName(user.first_name || '');
       setLastName(user.last_name || '');
       
-      // Safely extract only the last 9 digits in case the DB has +639 or full 09
       const existingPhone = user.phone_number || '';
       const last9Digits = existingPhone.replace(/\D/g, '').slice(-9);
       setPhone(last9Digits);
       
-      setProfileImage(user.profile_picture || null); 
+      // Check if Django returned a full URL or just the Supabase path
+      if (user.profile_picture) {
+        if (user.profile_picture.startsWith('http')) {
+          setProfileImage(user.profile_picture);
+        } else {
+          setProfileImage(`${SUPABASE_PIC_URL}${user.profile_picture}`);
+        }
+      }
     }
   }, [user]);
 
@@ -61,7 +70,6 @@ export default function PersonalInfoScreen() {
       return;
     }
 
-    // Ensure they typed exactly 9 digits after the "09"
     if (phone.length < 9) {
       Alert.alert(t.error, language === 'tl' ? 'Mangyaring ilagay ang buong 11-digit mobile number.' : 'Please enter a valid 11-digit mobile number.');
       return;
@@ -69,45 +77,41 @@ export default function PersonalInfoScreen() {
 
     setIsSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('first_name', firstName.trim());
-      formData.append('last_name', lastName.trim());
-      
-      // Reattach the "09" before sending to Django
-      formData.append('phone_number', '09' + phone);
-      
-      // We pass the existing patient_info to ensure we don't accidentally delete their barangay!
-      formData.append('patient_info', JSON.stringify({
-        ...(user?.patient_info || {})
-      }));
-
+      // --- 1. FILE UPLOAD (FRONTEND TO SUPABASE) ---
       if (profileImage && !profileImage.startsWith('http')) {
-        const filename = profileImage.split('/').pop() || 'profile.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image/jpeg`;
-        
-        formData.append('profile_picture', {
-          uri: profileImage,
-          name: filename,
-          type,
-        } as any);
+        // Format path as requested: [display_id]/profile.jpg
+        const displayId = user?.display_id || 'unknown';
+        const filePath = `${displayId}/profile.jpg`;
+
+        // Convert the phone's local file to a binary Blob for Supabase
+        const response = await fetch(profileImage);
+        const blob = await response.blob();
+
+        const { error: uploadError } = await supabase.storage
+          .from('profile-pictures')
+          .upload(filePath, blob, { 
+            upsert: true, 
+            contentType: 'image/jpeg' 
+          });
+
+        if (uploadError) throw uploadError;
+
+        // --- 2. DATABASE UPDATE (NEW ENDPOINT) ---
+        await apiClient.put('accounts/profile/update/', {
+          profile_picture: filePath
+        });
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const baseUrl = apiClient.defaults.baseURL || 'http://10.0.2.2:8000/';
-
-      const response = await fetch(`${baseUrl}user/`, {
-        method: 'POST', 
-        headers: { 
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Accept': 'application/json',
-        },
-        body: formData,
+      // --- SAVE REMAINING TEXT DATA ---
+      // Send the name, phone, and patient info to the standard endpoint as clean JSON
+      await apiClient.put('user/', {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        phone_number: '09' + phone,
+        patient_info: {
+          ...(user?.patient_info || {})
+        }
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to save profile on the server.');
-      }
 
       await fetchUserFromDjango();
       Alert.alert(t.success, t.profileUpdated);
@@ -130,11 +134,7 @@ export default function PersonalInfoScreen() {
       <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">
         
         <View className="items-center mb-8">
-          <TouchableOpacity 
-            onPress={pickImage}
-            activeOpacity={0.8}
-            className="relative"
-          >
+          <TouchableOpacity onPress={pickImage} activeOpacity={0.8} className="relative">
             <View className="w-28 h-28 rounded-full bg-orange-100 items-center justify-center overflow-hidden border-4 border-white shadow-sm">
               {profileImage ? (
                 <Image source={{ uri: profileImage }} className="w-full h-full" />
@@ -142,7 +142,6 @@ export default function PersonalInfoScreen() {
                 <User size={50} color="#DC2626" />
               )}
             </View>
-            
             <View className="absolute bottom-0 right-0 bg-red-600 w-10 h-10 rounded-full border-4 border-white items-center justify-center shadow-sm">
               <Camera size={16} color="white" />
             </View>
@@ -167,23 +166,21 @@ export default function PersonalInfoScreen() {
             </View>
           </View>
 
-          {/* FIX: Locked "09" prefix and restricted to exactly 9 additional numbers */}
           <View className="mb-2">
             <Text className="text-gray-700 font-bold text-xs mb-2 ml-1 uppercase tracking-wider">{t.mobileNumber}</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
               <Phone size={20} color="#9CA3AF" className="mr-3" />
-              <Text className="text-gray-900 text-base mr-1">09</Text>
+              <Text className="text-gray-900 font-bold text-base mr-1">09</Text>
               <TextInput 
                 value={phone} 
-                onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))} // Strips anything that isn't a number
+                onChangeText={(text) => setPhone(text.replace(/[^0-9]/g, ''))} 
                 keyboardType="number-pad" 
-                maxLength={9} // 9 digits + our fixed 09 = 11 Philippine format
+                maxLength={9} 
                 className="flex-1 text-gray-900 font-medium text-base tracking-widest" 
                 placeholder="XXXXXXXXX" 
               />
             </View>
           </View>
-
         </View>
 
         <TouchableOpacity onPress={handleSave} disabled={isSaving} className={`w-full rounded-2xl py-4 flex-row items-center justify-center shadow-sm ${isSaving ? 'bg-red-400' : 'bg-red-600'}`}>

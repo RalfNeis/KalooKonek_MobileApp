@@ -25,6 +25,7 @@ interface UserData {
   phone_number: string;
   osca_id?: string;
   patient_info: PatientInfo | null;
+  profile_picture?: string | null; // <--- THE CRUCIAL MISSING PIECE!
 }
 
 interface DashboardData {
@@ -41,7 +42,6 @@ interface DashboardData {
   }[];
 }
 
-// 1. Updated UserState to include our new accessibility properties
 interface UserState {
   user: UserData | null;
   dashboard: DashboardData | null;
@@ -66,7 +66,6 @@ export const useUserStore = create<UserState>()(
       isLoading: false,
       lastUpdated: null,
       
-      // 2. Added default values for accessibility
       language: 'en',
       textScale: 1,
 
@@ -92,11 +91,9 @@ export const useUserStore = create<UserState>()(
         }
       },
 
-      // 3. Added the setter functions so components can update the store
       setLanguage: (lang) => set({ language: lang }),
       setTextScale: (scale) => set({ textScale: scale }),
 
-      // 4. clearUser only wipes sensitive session data, keeping accessibility preferences intact
       clearUser: () => set({ user: null, dashboard: null, lastUpdated: null }),
     }),
     {

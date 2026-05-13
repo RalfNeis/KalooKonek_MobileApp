@@ -1,5 +1,6 @@
 /// <reference types="nativewind/types" />
 import { Tabs } from 'expo-router';
+import { GlobalText as Text } from '../../components/GlobalText';
 import { Home, Megaphone } from 'lucide-react-native';
 
 export default function TabLayout() {

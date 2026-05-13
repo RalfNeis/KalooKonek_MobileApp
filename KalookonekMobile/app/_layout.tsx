@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import { Stack, Link } from 'expo-router';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { User, QrCode } from 'lucide-react-native';
 
 const Logo = () => (

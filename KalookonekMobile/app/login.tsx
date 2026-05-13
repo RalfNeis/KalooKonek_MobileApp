@@ -1,15 +1,17 @@
 /// <reference types="nativewind/types" />
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { QrCode, User as UserIcon, Lock } from 'lucide-react-native';
-import { supabase } from '../lib/supabase'; // <-- Import our Supabase client
+import { supabase } from '../lib/supabase';
+import { apiClient } from '../api/client'; // <-- Added to fetch the user role from Django
 
 export default function Login() {
   const router = useRouter();
   const [seniorId, setSeniorId] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Add a loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!seniorId || !password) {
@@ -19,9 +21,7 @@ export default function Login() {
 
     setIsLoading(true);
 
-    // Note: Supabase natively uses email for login. If your backend registers 
-    // seniors with a fake email format (like 2025-001@kalookonek.com), 
-    // you would append it here. For now, we pass the input directly.
+    // 1. Authenticate with Supabase first
     const { error } = await supabase.auth.signInWithPassword({
       email: seniorId, 
       password: password,
@@ -30,10 +30,37 @@ export default function Login() {
     if (error) {
       Alert.alert('Login Failed', error.message);
       setIsLoading(false);
-    } else {
-      // Success! The Traffic Cop (index.tsx) will automatically detect 
-      // the new session and route us, but we can safely push to tabs here too.
+      return; // Stop execution
+    } 
+
+    // 2. Fetch the profile from Django to check the role
+    try {
+      const profileResponse = await apiClient.get('accounts/profile/');
+      const userRole = profileResponse.data.user.role;
+
+      // THE BOUNCER: Block Admins and Staff
+      if (userRole === 'admin' || userRole === 'staff') {
+        Alert.alert(
+          'Access Denied', 
+          'The mobile app is for senior citizens only. Please log in through the KalooKonek Web Dashboard.'
+        );
+        
+        // Wipe the session so they aren't secretly logged in
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        return; 
+      }
+
+      // Success! Patient verified. Send them to the dashboard.
       router.replace('/(tabs)');
+
+    } catch (err: any) {
+      console.error("Profile check failed:", err);
+      Alert.alert('Login Error', 'Could not verify your account role with the server.');
+      
+      // Wipe the session if the server check fails just to be safe
+      await supabase.auth.signOut();
+      setIsLoading(false);
     }
   };
 

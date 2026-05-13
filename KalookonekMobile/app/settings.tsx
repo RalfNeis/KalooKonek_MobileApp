@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { LogOut, User, Bell, Shield, ChevronRight, Type, Globe } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';

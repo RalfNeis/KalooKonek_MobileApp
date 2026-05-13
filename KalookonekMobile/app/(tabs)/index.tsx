@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React, { useEffect, useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, RefreshControl } from 'react-native';
+import { ScrollView, View, TouchableOpacity, RefreshControl } from 'react-native';
+import { GlobalText as Text } from '../../components/GlobalText';
 import { useRouter } from 'expo-router';
 import * as Network from 'expo-network';
 import { HeartPulse, Pill, Calendar as CalendarIcon, PhoneCall, ShieldAlert, ArrowRight, QrCode, WifiOff, User } from 'lucide-react-native';

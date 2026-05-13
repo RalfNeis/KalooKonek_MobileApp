@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React, { useState } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, Alert, Linking, ActivityIndicator } from 'react-native';
+import { ScrollView, View, TouchableOpacity, Alert, Linking, ActivityIndicator } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { Bell, ShieldAlert } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';

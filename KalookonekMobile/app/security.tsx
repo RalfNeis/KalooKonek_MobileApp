@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Lock, ShieldCheck } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';

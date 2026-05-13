@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React, { useState } from 'react';
-import { ScrollView, View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { ScrollView, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { Calendar as CalendarIcon } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useUserStore } from '../store/useUserStore';

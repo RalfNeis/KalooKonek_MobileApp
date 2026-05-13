@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React, { useState, useEffect, useRef } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, View, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import QRCode from 'react-native-qrcode-svg';
 import { ShieldAlert, Download, ShieldCheck, Clock, RefreshCw, Lock, MapPin } from 'lucide-react-native';
 import { captureRef } from 'react-native-view-shot';

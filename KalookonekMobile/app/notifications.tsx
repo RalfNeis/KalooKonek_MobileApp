@@ -1,6 +1,7 @@
 /// <reference types="nativewind/types" />
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import { View, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, BellRing, Smartphone, Mail } from 'lucide-react-native';
 

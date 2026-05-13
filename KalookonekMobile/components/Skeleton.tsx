@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleProp, ViewStyle } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 
 interface SkeletonProps {
   width?: number | string;

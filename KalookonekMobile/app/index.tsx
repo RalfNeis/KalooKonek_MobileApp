@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { Redirect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 

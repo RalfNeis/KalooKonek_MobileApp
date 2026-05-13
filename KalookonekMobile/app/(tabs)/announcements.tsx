@@ -1,5 +1,6 @@
 /// <reference types="nativewind/types" />
-import { ScrollView, View, Text, TouchableOpacity } from 'react-native';
+import { ScrollView, View, TouchableOpacity } from 'react-native';
+import { GlobalText as Text } from '../../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 // 1. Import our global store

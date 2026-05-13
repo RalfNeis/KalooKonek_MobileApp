@@ -1,5 +1,6 @@
 /// <reference types="nativewind/types" />
-import { ScrollView, View, Text, TouchableOpacity } from 'react-native';
+import { ScrollView, View, TouchableOpacity } from 'react-native';
+import { GlobalText as Text } from '../components/GlobalText';
 import { Calendar, MapPin, Share2 } from 'lucide-react-native';
 
 export default function AnnouncementDetails() {

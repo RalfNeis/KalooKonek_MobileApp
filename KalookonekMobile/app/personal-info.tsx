@@ -10,7 +10,6 @@ import { apiClient } from '../api/client';
 import { supabase } from '../lib/supabase';
 import { translations } from '../lib/i18n';
 
-// 3. IMAGE RETRIEVAL: The base URL provided by your backend team
 const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
 
 export default function PersonalInfoScreen() {
@@ -34,7 +33,6 @@ export default function PersonalInfoScreen() {
       const last9Digits = existingPhone.replace(/\D/g, '').slice(-9);
       setPhone(last9Digits);
       
-      // Check if Django returned a full URL or just the Supabase path
       if (user.profile_picture) {
         if (user.profile_picture.startsWith('http')) {
           setProfileImage(user.profile_picture);
@@ -48,12 +46,13 @@ export default function PersonalInfoScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(t.permissionDenied, t.photoPermissionMsg);
+      Alert.alert(t.permissionDenied || 'Permission Denied', t.photoPermissionMsg || 'We need access to your photos.');
       return;
     }
 
+    // FIX: Updated to the new MediaType syntax to remove the terminal warning
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1], 
       quality: 0.8,
@@ -66,44 +65,57 @@ export default function PersonalInfoScreen() {
 
   const handleSave = async () => {
     if (!firstName || !lastName) {
-      Alert.alert(t.error, t.emptyNameError);
+      Alert.alert(t.error || 'Error', t.emptyNameError || 'Please fill in all fields.');
       return;
     }
 
     if (phone.length < 9) {
-      Alert.alert(t.error, language === 'tl' ? 'Mangyaring ilagay ang buong 11-digit mobile number.' : 'Please enter a valid 11-digit mobile number.');
+      Alert.alert(t.error || 'Error', language === 'tl' ? 'Mangyaring ilagay ang buong 11-digit mobile number.' : 'Please enter a valid 11-digit mobile number.');
       return;
     }
 
     setIsSaving(true);
     try {
-      // --- 1. FILE UPLOAD (FRONTEND TO SUPABASE) ---
+      // --- 1. FILE UPLOAD (RAW BINARY DIRECT TO REST API) ---
       if (profileImage && !profileImage.startsWith('http')) {
-        // Format path as requested: [display_id]/profile.jpg
-        const displayId = user?.display_id || 'unknown';
-        const filePath = `${displayId}/profile.jpg`;
+        
+        // 1a. Grab the current session for authorization AND the strict UUID
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // FIX: Use the secret Supabase UUID to pass the Row-Level Security policy!
+        const userId = session?.user?.id || 'unknown';
+        const fileExt = profileImage.split('.').pop() || 'jpg';
+        const filePath = `${userId}/avatar.${fileExt}`;
+        const contentType = `image/${fileExt === 'png' ? 'png' : 'jpeg'}`;
 
-        // Convert the phone's local file to a binary Blob for Supabase
-        const response = await fetch(profileImage);
-        const blob = await response.blob();
+        // 1b. Convert local URI to a raw binary Blob
+        const fileResp = await fetch(profileImage);
+        const rawBlob = await fileResp.blob();
 
-        const { error: uploadError } = await supabase.storage
-          .from('profile-pictures')
-          .upload(filePath, blob, { 
-            upsert: true, 
-            contentType: 'image/jpeg' 
-          });
+        // 1c. Direct REST POST to bypass the supabase-js Native bugs
+        const uploadUrl = `https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/profile-pictures/${filePath}`;
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST', 
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': contentType,
+            'x-upsert': 'true', 
+          },
+          body: rawBlob, 
+        });
 
-        if (uploadError) throw uploadError;
+        if (!uploadResponse.ok) {
+          const errText = await uploadResponse.text();
+          throw new Error(`Supabase Rejected: ${errText}`);
+        }
 
-        // --- 2. DATABASE UPDATE (NEW ENDPOINT) ---
+        // --- 2. DATABASE UPDATE (DJANGO ENDPOINT) ---
         await apiClient.put('accounts/profile/update/', {
           profile_picture: filePath
         });
       }
 
-      // --- SAVE REMAINING TEXT DATA ---
-      // Send the name, phone, and patient info to the standard endpoint as clean JSON
+      // --- 3. SAVE REMAINING TEXT DATA ---
       await apiClient.put('user/', {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -114,11 +126,11 @@ export default function PersonalInfoScreen() {
       });
 
       await fetchUserFromDjango();
-      Alert.alert(t.success, t.profileUpdated);
+      Alert.alert(t.success || 'Success', t.profileUpdated || 'Profile updated successfully.');
       router.back();
     } catch (error: any) {
       console.error('Failed to update profile:', error);
-      Alert.alert(t.error, t.saveError);
+      Alert.alert(t.error || 'Upload Error', error.message || 'Could not save changes.');
     } finally {
       setIsSaving(false);
     }

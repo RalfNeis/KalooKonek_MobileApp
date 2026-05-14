@@ -10,9 +10,9 @@ import { apiClient } from '../api/client';
 export default function Appointments() {
   const { dashboard, fetchDashboardFromDjango } = useUserStore();
 
-  // Form State
-  const [department, setDepartment] = useState('General Medicine');
-  const [date, setDate] = useState(''); // Stores the formatted YYYY-MM-DD string for Django
+  // Form State - Completely changed and blank by default!
+  const [appointmentName, setAppointmentName] = useState(''); 
+  const [date, setDate] = useState(''); 
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -22,7 +22,6 @@ export default function Appointments() {
 
   // Handle native date picker selection
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    // On Android, we need to hide the picker immediately after a selection
     if (Platform.OS === 'android') {
       setShowPicker(false);
     }
@@ -30,7 +29,6 @@ export default function Appointments() {
     if (selectedDate) {
       setDateObj(selectedDate);
       
-      // Format the date exactly how Django expects it: YYYY-MM-DD
       const year = selectedDate.getFullYear();
       const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
       const day = String(selectedDate.getDate()).padStart(2, '0');
@@ -40,18 +38,21 @@ export default function Appointments() {
   };
 
   const handleBookAppointment = async () => {
-    if (!department || !date) {
-      Alert.alert('Missing Details', 'Please enter a department and select a preferred date.');
+    if (!appointmentName || !date) {
+      Alert.alert('Missing Details', 'Please enter the name of the appointment and select a preferred date.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      // Combine the name and notes to match Django's "reason" field requirement
+      const combinedReason = notes.trim() ? `${appointmentName}\n\nAdditional Notes: ${notes}` : appointmentName;
+
+      // Sending EXACTLY what user/views.py demands
       await apiClient.post('appointments/', {
-        department: department,
-        preferred_date: date,
-        notes: notes,
+        requested_date: date,
+        reason: combinedReason,
       });
 
       Alert.alert('Success', 'Your appointment request has been sent!', [
@@ -59,6 +60,7 @@ export default function Appointments() {
           text: 'OK', 
           onPress: async () => {
             // Reset form
+            setAppointmentName('');
             setDate('');
             setNotes('');
             setDateObj(new Date());
@@ -85,13 +87,15 @@ export default function Appointments() {
       <View className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mb-8">
         <Text className="font-bold text-gray-900 text-lg mb-6">Book New Appointment</Text>
         
-        {/* Department Field */}
+        {/* Name of Appointment Field (REPLACED DEPARTMENT) */}
         <View className="mb-4">
-          <Text className="text-gray-600 font-medium text-sm mb-2">Department</Text>
-          <View className="w-full bg-red-50 border border-red-100 rounded-xl py-2 px-4 justify-center h-14">
+          <Text className="text-gray-600 font-medium text-sm mb-2">Name of Appointment</Text>
+          <View className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2 px-4 justify-center min-h-[56px]">
              <TextInput 
-                value={department}
-                onChangeText={setDepartment}
+                value={appointmentName}
+                onChangeText={setAppointmentName}
+                placeholder="e.g., General Checkup, Blood test..."
+                placeholderTextColor="#9CA3AF"
                 className="text-gray-900 text-base font-medium"
              />
           </View>
@@ -118,7 +122,7 @@ export default function Appointments() {
             mode="date"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handleDateChange}
-            minimumDate={new Date()} // Prevents selecting past dates!
+            minimumDate={new Date()} 
           />
         )}
 
@@ -160,9 +164,9 @@ export default function Appointments() {
       ) : (
         dashboard.upcoming_appointments.map((appt: any, index: number) => (
           <View key={index} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 mb-3 flex-row items-center justify-between">
-             <View>
-               <Text className="font-bold text-gray-900">{appt.details || appt.department}</Text>
-               <Text className="text-sm text-gray-500 mt-1">{appt.date}</Text>
+             <View className="flex-1 mr-4">
+               <Text className="font-bold text-gray-900">{appt.details || appt.reason || appt.department}</Text>
+               <Text className="text-sm text-gray-500 mt-1">{appt.date || appt.requested_date}</Text>
              </View>
              <View className="bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
                <Text className="text-amber-600 text-xs font-bold">{appt.status || 'Pending'}</Text>

@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import Skeleton from '../../components/Skeleton'; 
 import { translations } from '../../lib/i18n'; 
 const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
+
 export default function Dashboard() {
   const router = useRouter();
   const [isOffline, setIsOffline] = useState(false);
@@ -180,7 +181,11 @@ export default function Dashboard() {
           dashboard.announcements.slice(0, 2).map((ann) => (
             <TouchableOpacity 
               key={ann.id} 
-              onPress={() => router.push('/announcement')}
+              // PASS THE DYNAMIC DATA HERE:
+              onPress={() => router.push({ 
+                pathname: '/announcement', 
+                params: { title: ann.title, date: ann.date, body: ann.body } 
+              })}
               className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mb-4 overflow-hidden"
             >
               <View className="w-full h-1 absolute top-0 left-0 right-0 bg-red-500" />

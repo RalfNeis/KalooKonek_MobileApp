@@ -7,7 +7,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { User, Phone, Save, Camera } from 'lucide-react-native';
 import { useUserStore } from '../store/useUserStore';
 import { apiClient } from '../api/client'; 
-import { supabase } from '../lib/supabase';
 import { translations } from '../lib/i18n';
 
 const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
@@ -34,10 +33,17 @@ export default function PersonalInfoScreen() {
       setPhone(last9Digits);
       
       if (user.profile_picture) {
-        if (user.profile_picture.startsWith('http')) {
-          setProfileImage(user.profile_picture);
+        let picUrl = user.profile_picture;
+        
+        // THE ILLUSION FIX: If Django sends localhost, rewrite it so the Android emulator can see it!
+        if (Platform.OS === 'android' && picUrl.includes('localhost')) {
+           picUrl = picUrl.replace('localhost', '10.0.2.2');
+        }
+
+        if (picUrl.startsWith('http')) {
+          setProfileImage(picUrl);
         } else {
-          setProfileImage(`${SUPABASE_PIC_URL}${user.profile_picture}`);
+          setProfileImage(`${SUPABASE_PIC_URL}${picUrl}`);
         }
       }
     }
@@ -50,7 +56,6 @@ export default function PersonalInfoScreen() {
       return;
     }
 
-    // FIX: Updated to the new MediaType syntax to remove the terminal warning
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -76,53 +81,31 @@ export default function PersonalInfoScreen() {
 
     setIsSaving(true);
     try {
-      // --- 1. FILE UPLOAD (RAW BINARY DIRECT TO REST API) ---
+      // 1. Create FormData to send directly to Django (Bypassing Supabase RLS completely)
+      const formData = new FormData();
+      formData.append('first_name', firstName.trim());
+      formData.append('last_name', lastName.trim());
+      formData.append('phone_number', '09' + phone);
+      formData.append('patient_info', JSON.stringify({
+        ...(user?.patient_info || {})
+      }));
+
+      // 2. Append the Image
       if (profileImage && !profileImage.startsWith('http')) {
-        
-        // 1a. Grab the current session for authorization AND the strict UUID
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        // FIX: Use the secret Supabase UUID to pass the Row-Level Security policy!
-        const userId = session?.user?.id || 'unknown';
         const fileExt = profileImage.split('.').pop() || 'jpg';
-        const filePath = `${userId}/avatar.${fileExt}`;
-        const contentType = `image/${fileExt === 'png' ? 'png' : 'jpeg'}`;
-
-        // 1b. Convert local URI to a raw binary Blob
-        const fileResp = await fetch(profileImage);
-        const rawBlob = await fileResp.blob();
-
-        // 1c. Direct REST POST to bypass the supabase-js Native bugs
-        const uploadUrl = `https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/profile-pictures/${filePath}`;
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'POST', 
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-            'Content-Type': contentType,
-            'x-upsert': 'true', 
-          },
-          body: rawBlob, 
-        });
-
-        if (!uploadResponse.ok) {
-          const errText = await uploadResponse.text();
-          throw new Error(`Supabase Rejected: ${errText}`);
-        }
-
-        // --- 2. DATABASE UPDATE (DJANGO ENDPOINT) ---
-        await apiClient.put('accounts/profile/update/', {
-          profile_picture: filePath
-        });
+        
+        formData.append('profile_picture', {
+          uri: Platform.OS === 'android' ? profileImage : profileImage.replace('file://', ''),
+          name: `avatar.${fileExt}`,
+          type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+        } as any);
       }
 
-      // --- 3. SAVE REMAINING TEXT DATA ---
-      await apiClient.put('user/', {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        phone_number: '09' + phone,
-        patient_info: {
-          ...(user?.patient_info || {})
-        }
+      // 3. Send to Django API
+      await apiClient.put('user/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
       await fetchUserFromDjango();
@@ -130,7 +113,7 @@ export default function PersonalInfoScreen() {
       router.back();
     } catch (error: any) {
       console.error('Failed to update profile:', error);
-      Alert.alert(t.error || 'Upload Error', error.message || 'Could not save changes.');
+      Alert.alert(t.error || 'Upload Error', 'Could not save changes. Please try again.');
     } finally {
       setIsSaving(false);
     }

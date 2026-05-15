@@ -7,21 +7,12 @@ import { useUserStore } from '../../store/useUserStore';
 
 export default function Announcements() {
   const router = useRouter();
-  
-  // FIX: Grab isLoading and the fetch function from your store
   const { dashboard, isLoading, fetchDashboardFromDjango } = useUserStore();
 
   return (
     <ScrollView 
       className="flex-1 bg-[#F8F9FA] p-5"
-      // FIX: Added the native Pull-to-Refresh control!
-      refreshControl={
-        <RefreshControl 
-          refreshing={isLoading} 
-          onRefresh={fetchDashboardFromDjango} 
-          colors={['#DC2626']} 
-        />
-      }
+      refreshControl={<RefreshControl refreshing={isLoading} onRefresh={fetchDashboardFromDjango} colors={['#DC2626']} />}
     >
       <View className="mb-6 mt-2">
         <Text className="text-3xl font-bold text-gray-900 mb-2">Announcements</Text>
@@ -41,7 +32,7 @@ export default function Announcements() {
               key={ann.id} 
               onPress={() => router.push({ 
                 pathname: '/announcement', 
-                params: { title: ann.title, date: ann.date, body: ann.body } 
+                params: { title: ann.title, date: ann.date, time: ann.time, body: ann.body } 
               })}
               className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm overflow-hidden"
               activeOpacity={0.7}
@@ -59,7 +50,9 @@ export default function Announcements() {
                      </Text>
                   </View>
                 )}
-                <Text className="text-xs text-gray-400 font-medium">{ann.date}</Text>
+                <Text className="text-xs text-gray-400 font-medium">
+                  {ann.date} {ann.time ? `• ${ann.time}` : ''}
+                </Text>
               </View>
               
               <Text className="font-bold text-gray-900 text-xl mb-3">{ann.title}</Text>

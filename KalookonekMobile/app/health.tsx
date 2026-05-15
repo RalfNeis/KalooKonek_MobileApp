@@ -1,5 +1,5 @@
 /// <reference types="nativewind/types" />
-import { ScrollView, View, TouchableOpacity } from 'react-native';
+import { ScrollView, View, TouchableOpacity, RefreshControl } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { Heart, Activity, Scale, Download } from 'lucide-react-native';
@@ -8,11 +8,15 @@ import { useUserStore } from '../store/useUserStore';
 export default function HealthRecords() {
   const router = useRouter();
   
-  // Pull the dashboard data from the store
-  const { dashboard } = useUserStore();
+  // ADDED: isLoading and fetchDashboardFromDjango for the refresh control
+  const { dashboard, isLoading, fetchDashboardFromDjango } = useUserStore();
 
   return (
-    <ScrollView className="flex-1 bg-[#F8F9FA] p-4">
+    <ScrollView 
+      className="flex-1 bg-[#F8F9FA] p-4"
+      // ADDED: Pull-to-refresh control
+      refreshControl={<RefreshControl refreshing={isLoading} onRefresh={fetchDashboardFromDjango} colors={['#DC2626']} />}
+    >
       <Text className="text-gray-500 text-sm mb-6">View your medical history and vital signs.</Text>
       
       {/* Vitals Cards (Set to "--" until a dedicated vitals endpoint is added) */}
@@ -41,7 +45,7 @@ export default function HealthRecords() {
         </View>
       </View>
 
-      {/* Recent Checkups Table (Dynamically Mapped) */}
+      {/* Recent Checkups Table */}
       <View className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-8">
         <View className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex-row justify-between items-center">
           <Text className="font-bold text-gray-900">Recent Checkups</Text>
@@ -51,7 +55,6 @@ export default function HealthRecords() {
           </TouchableOpacity>
         </View>
         
-        {/* Dynamic Mapping Logic */}
         {!dashboard?.recent_records || dashboard.recent_records.length === 0 ? (
           <View className="p-8 items-center justify-center">
             <Text className="text-gray-400 italic">-- No recent checkups on file --</Text>
@@ -61,11 +64,25 @@ export default function HealthRecords() {
             <View key={record.id} className="p-5 border-b border-gray-100">
               <View className="flex-row justify-between mb-1">
                 <Text className="font-bold text-gray-900">{record.visit_date}</Text>
-                <TouchableOpacity onPress={() => router.push('/checkup-details')}>
+                
+                {/* FIXED: Sending dynamic parameters instead of a static link */}
+                <TouchableOpacity onPress={() => router.push({
+                  pathname: '/checkup-details',
+                  params: {
+                    visit_date: record.visit_date,
+                    status: record.status,
+                    diagnosis: record.diagnosis,
+                    attending_staff: record.attending_staff,
+                    blood_pressure: record.blood_pressure,
+                    temperature: record.temperature,
+                    weight: record.weight,
+                    notes: record.notes
+                  }
+                })}>
                   <Text className="text-blue-600 font-bold text-xs py-1 px-2 -mr-2">View Details</Text>
                 </TouchableOpacity>
+
               </View>
-              {/* Uses Django's diagnosis data as the main description */}
               <Text className="text-sm text-gray-600 font-medium">
                 {record.diagnosis || 'General Checkup'}
               </Text>

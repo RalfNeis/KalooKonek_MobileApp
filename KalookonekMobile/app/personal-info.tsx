@@ -40,10 +40,12 @@ export default function PersonalInfoScreen() {
            picUrl = picUrl.replace('localhost', '10.0.2.2');
         }
 
+        const cacheBuster = `?t=${new Date().getTime()}`;
+
         if (picUrl.startsWith('http')) {
-          setProfileImage(picUrl);
+          setProfileImage(`${picUrl}${cacheBuster}`);
         } else {
-          setProfileImage(`${SUPABASE_PIC_URL}${picUrl}`);
+          setProfileImage(`${SUPABASE_PIC_URL}${picUrl}${cacheBuster}`);
         }
       }
     }

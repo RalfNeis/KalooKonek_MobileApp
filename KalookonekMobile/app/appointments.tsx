@@ -70,8 +70,15 @@ export default function Appointments() {
       ]);
       
     } catch (error: any) {
-      console.error("Booking error:", error);
-      Alert.alert('Error', 'Failed to send your request. Please check your connection and try again.');
+      console.error("Booking error:", error?.response?.data || error);
+      const serverMsg = error?.response?.data?.error;
+      if (error?.response?.status === 403) {
+        Alert.alert('Account Pending', serverMsg || 'Your account is still pending approval by an administrator.');
+      } else if (error?.response?.status === 404) {
+        Alert.alert('Profile Missing', serverMsg || 'No patient profile found. Please contact support.');
+      } else {
+        Alert.alert('Error', serverMsg || 'Failed to send your request. Please check your connection and try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

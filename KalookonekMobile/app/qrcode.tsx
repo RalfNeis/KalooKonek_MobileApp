@@ -180,7 +180,9 @@ export default function QRCodeScreen() {
 
   const displayName = `${user.first_name} ${user.last_name}`;
   const displayId = user.display_id || user.osca_id || 'PENDING';
-  const location = user.patient_info?.barangay ? `Brgy. ${user.patient_info.barangay}, Caloocan City` : 'Caloocan City';
+  const location = user.patient_info?.barangay 
+    ? `Brgy. ${user.patient_info.barangay.replace(/^(brgy\.?|barangay)\s*/i, '')}, Caloocan City` 
+    : 'Caloocan City';
 
   return (
     <ScrollView className="flex-1 bg-[#F8F9FA] p-5">

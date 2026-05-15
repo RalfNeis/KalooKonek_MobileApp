@@ -4,18 +4,18 @@ import { ScrollView, View, TouchableOpacity, RefreshControl, Image } from 'react
 import { GlobalText as Text } from '../../components/GlobalText';
 import { useRouter } from 'expo-router';
 import * as Network from 'expo-network';
-import { HeartPulse, Pill, Calendar as CalendarIcon, PhoneCall, ShieldAlert, ArrowRight, QrCode, WifiOff, User } from 'lucide-react-native';
+import { HeartPulse, Calendar as CalendarIcon, PhoneCall, ShieldAlert, ArrowRight, QrCode, WifiOff, User } from 'lucide-react-native';
 import { useUserStore } from '../../store/useUserStore'; 
 import { supabase } from '../../lib/supabase';
 import Skeleton from '../../components/Skeleton'; 
 import { translations } from '../../lib/i18n'; 
+
 const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
 
 export default function Dashboard() {
   const router = useRouter();
   const [isOffline, setIsOffline] = useState(false);
   
-  // 1. Pull user, dashboard, and language state from Zustand
   const { user, dashboard, fetchUserFromDjango, fetchDashboardFromDjango, isLoading, language } = useUserStore();
   const firstName = user?.first_name || 'Citizen';
   const t = translations[language]; 
@@ -44,7 +44,6 @@ export default function Dashboard() {
 
   const actions = [
     { icon: HeartPulse, label: t.healthRecords, desc: t.viewCheckups, color: '#3B82F6', bg: 'bg-blue-50', path: '/health' },
-    { icon: Pill, label: t.medicine, desc: t.requestRefill, color: '#10B981', bg: 'bg-emerald-50', path: '/medicine' },
     { icon: CalendarIcon, label: t.appointments, desc: t.oscaSchedule, color: '#F59E0B', bg: 'bg-amber-50', path: '/appointments' },
     { icon: PhoneCall, label: t.emergency, desc: t.contactBarangay, color: '#8B5CF6', bg: 'bg-purple-50', path: '/emergency' }
   ];
@@ -52,24 +51,14 @@ export default function Dashboard() {
   if (isLoading && !dashboard && !user) {
     return (
       <View className="flex-1 bg-[#F8F9FA] p-5 pt-16">
-        <View className="mb-6">
-          <Skeleton width={180} height={32} className="mb-2" />
-          <Skeleton width="100%" height={16} className="mb-1" />
-          <Skeleton width="80%" height={16} />
-        </View>
         <Skeleton width="100%" height={260} className="rounded-3xl mb-8" />
-        <View className="flex-row flex-wrap justify-between mb-8">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} width="48%" height={120} className="rounded-2xl mb-4" />
-          ))}
-        </View>
       </View>
     );
   }
 
   return (
     <ScrollView 
-      className="flex-1 bg-[#F8F9FA] p-4"
+      className="flex-1 bg-[#F8F9FA] p-4 pt-8"
       refreshControl={<RefreshControl refreshing={isLoading} onRefresh={checkNetworkAndFetch} colors={['#DC2626']} />}
     >
       {isOffline && (
@@ -80,7 +69,7 @@ export default function Dashboard() {
       )}
 
       {/* Greeting Section */}
-      <View className="mb-6">
+      <View className="mb-6 mt-4">
         <Text className="text-4xl font-extrabold text-gray-900 mb-1">
           Mabuhay, <Text className="text-4xl font-extrabold text-red-600">{firstName}!</Text>
         </Text>
@@ -102,7 +91,6 @@ export default function Dashboard() {
         </View>
         
         <View className="p-6 items-center">
-          {/* Ensure Profile Picture shows up! */}
           <View className="w-20 h-20 rounded-full bg-orange-100 items-center justify-center mb-4 overflow-hidden border-2 border-white shadow-sm">
           {(user as any)?.profile_picture ? (
             <Image 
@@ -122,8 +110,12 @@ export default function Dashboard() {
             <>
               <Text className="text-xl font-bold text-gray-900 text-center">{user.first_name} {user.last_name}</Text>
               <Text className="text-red-600 font-bold text-sm mt-1">ID: {user.display_id || user.osca_id}</Text>
-              <Text className="text-xs text-gray-500 mt-2 mb-6 text-center">
-                {user.patient_info?.address || `${t.city}, Philippines`}
+              
+              {/* Note: This explicitly forces Barangay or defaults to Caloocan City */}
+              <Text className="text-xs text-gray-500 mt-2 mb-6 text-center font-medium">
+              {user.patient_info?.barangay 
+              ? `Brgy. ${user.patient_info.barangay.replace(/^(brgy\.?|barangay)\s*/i, '')}, Caloocan City` 
+              : 'Caloocan City'}
               </Text>
             </>
           ) : (
@@ -142,27 +134,58 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* Quick Actions Grid */}
-      <View className="flex-row flex-wrap justify-between mb-8">
-        {actions.map((act, i) => (
-          <TouchableOpacity 
-            key={i} 
-            onPress={() => router.push(act.path as any)}
-            // FIX: Removed min-h and flex-1 so it dynamically wraps and grows downwards seamlessly
-            className="w-[48%] bg-white border border-gray-100 rounded-2xl p-4 mb-4 shadow-sm flex-col items-start gap-3"
-          >
-            <View className={`${act.bg} p-3 rounded-xl`}><act.icon size={24} color={act.color} /></View>
+      {/* Quick Actions Grid - Hardcoded to bypass NativeWind Bug */}
+      <View className="mb-8 w-full">
+        {/* Top Row: Health & Appointments */}
+        <View className="flex-row justify-between mb-4 w-full">
+          <TouchableOpacity onPress={() => router.push(actions[0].path as any)} className="w-[48%] bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex-col items-start gap-3">
+            <View className={`${actions[0].bg} p-3 rounded-xl`}><HeartPulse size={24} color={actions[0].color} /></View>
             <View className="w-full">
-              <Text className="font-bold text-gray-900 text-sm flex-wrap leading-tight">{act.label}</Text>
-              <Text className="text-[10px] text-gray-500 mt-1 flex-wrap leading-tight">{act.desc}</Text>
+              <Text className="font-bold text-gray-900 text-sm flex-wrap">{actions[0].label}</Text>
+              <Text className="text-[10px] text-gray-500 mt-1 flex-wrap">{actions[0].desc}</Text>
             </View>
           </TouchableOpacity>
-        ))}
+
+          <TouchableOpacity onPress={() => router.push(actions[1].path as any)} className="w-[48%] bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex-col items-start gap-3">
+            <View className={`${actions[1].bg} p-3 rounded-xl`}><CalendarIcon size={24} color={actions[1].color} /></View>
+            <View className="w-full">
+              <Text className="font-bold text-gray-900 text-sm flex-wrap">{actions[1].label}</Text>
+              <Text className="text-[10px] text-gray-500 mt-1 flex-wrap">{actions[1].desc}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom Row: Emergency (Inline styles guarantee centering) */}
+        <TouchableOpacity 
+          onPress={() => router.push(actions[2].path as any)}
+          style={{ 
+            width: '100%', 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            backgroundColor: '#ffffff', 
+            borderColor: '#F3F4F6', 
+            borderWidth: 1, 
+            borderRadius: 16, 
+            paddingVertical: 20, 
+            elevation: 1,
+            position: 'relative'
+          }}
+        >
+          {/* Absolute positioning locks the icon to the left so it doesn't push the text */}
+          <View className={`${actions[2].bg} p-3 rounded-xl`} style={{ position: 'absolute', left: 16 }}>
+            <PhoneCall size={24} color={actions[2].color} />
+          </View>
+          
+          <View>
+            <Text className="font-bold text-gray-900 text-base text-center">{actions[2].label}</Text>
+            <Text className="text-xs text-gray-500 mt-1 text-center">{actions[2].desc}</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Announcements */}
-      <View className="mb-8">
-        {/* FIX: Added flex-wrap and gap-y to push the "View All" button safely down if text overlaps */}
+      <View className="mb-12">
         <View className="flex-row flex-wrap items-center justify-between mb-4 gap-y-2">
           <View className="flex-row items-center gap-2 pr-2">
             <ShieldAlert size={18} color="#EF4444" />
@@ -181,7 +204,6 @@ export default function Dashboard() {
           dashboard.announcements.slice(0, 2).map((ann) => (
             <TouchableOpacity 
               key={ann.id} 
-              // PASS THE DYNAMIC DATA HERE:
               onPress={() => router.push({ 
                 pathname: '/announcement', 
                 params: { title: ann.title, date: ann.date, body: ann.body } 

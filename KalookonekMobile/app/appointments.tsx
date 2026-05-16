@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
-import React, { useState } from 'react';
-import { ScrollView, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { ScrollView, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform, RefreshControl } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { Calendar as CalendarIcon } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -8,7 +8,14 @@ import { useUserStore } from '../store/useUserStore';
 import { apiClient } from '../api/client';
 
 export default function Appointments() {
-  const { dashboard, fetchDashboardFromDjango } = useUserStore();
+  const { dashboard, fetchDashboardFromDjango, isLoading } = useUserStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchDashboardFromDjango();
+    setIsRefreshing(false);
+  }, [fetchDashboardFromDjango]);
 
   // Form State - Completely changed and blank by default!
   const [appointmentName, setAppointmentName] = useState(''); 
@@ -85,7 +92,17 @@ export default function Appointments() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-[#F8F9FA] p-5">
+    <ScrollView 
+      className="flex-1 bg-[#F8F9FA] p-5"
+      refreshControl={
+        <RefreshControl 
+          refreshing={isRefreshing} 
+          onRefresh={handleRefresh} 
+          colors={['#DC2626']} 
+          tintColor="#DC2626" 
+        />
+      }
+    >
       <Text className="text-gray-500 text-sm mb-6 leading-relaxed">
         Schedule your next visit to the Health Center.
       </Text>

@@ -16,7 +16,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [isOffline, setIsOffline] = useState(false);
   
-  const { user, dashboard, fetchUserFromDjango, fetchDashboardFromDjango, isLoading, language } = useUserStore();
+  const { user, dashboard, fetchUserFromDjango, fetchDashboardFromDjango, isLoading, language, lastUpdated } = useUserStore();
   const firstName = user?.first_name || 'Citizen';
   const t = translations[language]; 
   
@@ -96,8 +96,8 @@ export default function Dashboard() {
             <Image 
               source={{ 
                 uri: (user as any).profile_picture.startsWith('http') 
-                  ? (user as any).profile_picture 
-                  : `${SUPABASE_PIC_URL}${(user as any).profile_picture}` 
+                  ? `${(user as any).profile_picture}?t=${lastUpdated || Date.now()}` 
+                  : `${SUPABASE_PIC_URL}${(user as any).profile_picture}?t=${lastUpdated || Date.now()}` 
               }} 
               className="w-full h-full" 
             />

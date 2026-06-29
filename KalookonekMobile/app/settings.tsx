@@ -1,18 +1,64 @@
 /// <reference types="nativewind/types" />
-import React from 'react';
-import { View, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
-import { LogOut, User, Bell, Shield, ChevronRight, Type, Globe } from 'lucide-react-native';
+import { LogOut, User, Bell, Shield, ChevronRight, Type, Globe, BellRing } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useUserStore } from '../store/useUserStore';
 import { translations } from '../lib/i18n';
+import { apiClient } from '../api/client';
 
 export default function Settings() {
   const router = useRouter();
   
-  const { clearUser, language, setLanguage, textScale, setTextScale } = useUserStore();
+  const { user, fetchUserFromDjango, clearUser, language, setLanguage, textScale, setTextScale } = useUserStore();
   const t = translations[language];
+
+  const [pushEnabled, setPushEnabled] = useState(true);
+
+  useEffect(() => {
+    if (user?.patient_info) {
+      setPushEnabled((user.patient_info as any).wants_push ?? true);
+    }
+  }, [user]);
+
+  const togglePush = async (newValue: boolean) => {
+    setPushEnabled(newValue);
+
+    try {
+      const updatedPatientInfo = {
+        ...(user?.patient_info || {}),
+        wants_push: newValue,
+      };
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const baseUrl = apiClient.defaults.baseURL || 'http://10.0.2.2:8000/';
+
+      const response = await fetch(`${baseUrl}user/`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ patient_info: updatedPatientInfo }),
+      });
+
+      if (!response.ok) {
+        const errorHtml = await response.text();
+        const cleanError = errorHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 250);
+        throw new Error(`Django Crash: ${cleanError}`);
+      }
+
+      fetchUserFromDjango();
+      
+    } catch (error: any) {
+      console.error('Failed to update notification settings:', error);
+      Alert.alert('Backend Error', error.message || 'Could not save changes.');
+      setPushEnabled(!newValue);
+    }
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -106,8 +152,30 @@ export default function Settings() {
 
         <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-8 shadow-sm border border-gray-100">
           <MenuItem icon={User} label={t.personalInfo} onPress={() => router.push('/personal-info')} />
-          <MenuItem icon={Bell} label={t.notifications} onPress={() => router.push('/notifications')} />
           <MenuItem icon={Shield} label={t.privacy} onPress={() => router.push('/security')} />
+        </View>
+
+        <Text className="text-gray-500 font-bold mb-3 ml-2 uppercase tracking-wider" style={{ fontSize: 12 * textScale }}>
+          {t.notifications || 'Notifications'}
+        </Text>
+        
+        <View className="bg-white rounded-2xl p-4 mb-8 shadow-sm border border-gray-100">
+          <View className="flex-row items-center justify-between min-h-[56px]">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-blue-50 p-2 rounded-lg mr-3">
+                <BellRing size={20} color="#3B82F6" />
+              </View>
+              <Text className="text-gray-700 font-medium flex-1 flex-wrap" style={{ fontSize: 16 * textScale }}>
+                {t.pushNotifs || 'Push Notifications'}
+              </Text>
+            </View>
+            <Switch 
+              value={pushEnabled} 
+              onValueChange={togglePush} 
+              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+              thumbColor="white"
+            />
+          </View>
         </View>
 
         <TouchableOpacity 

@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { User, Phone, Save, Camera } from 'lucide-react-native';
 import { useUserStore } from '../store/useUserStore';
-import { apiClient } from '../api/client'; 
+import { supabase } from '../lib/supabase';
 import { translations } from '../lib/i18n';
 
 const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
@@ -83,7 +83,7 @@ export default function PersonalInfoScreen() {
 
     setIsSaving(true);
     try {
-      // 1. Create FormData to send directly to Django (Bypassing Supabase RLS completely)
+      // 1. Build FormData payload
       const formData = new FormData();
       formData.append('first_name', firstName.trim());
       formData.append('last_name', lastName.trim());
@@ -92,30 +92,62 @@ export default function PersonalInfoScreen() {
         ...(user?.patient_info || {})
       }));
 
-      // 2. Append the Image
+      // 2. Append image — extract real filename & MIME from the URI
       if (profileImage && !profileImage.startsWith('http')) {
-        const fileExt = profileImage.split('.').pop() || 'jpg';
-        
+        const localUri = profileImage.split('?')[0]; // Strip cache-busters
+        const filename = localUri.split('/').pop() || 'profile.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
+
         formData.append('profile_picture', {
-          uri: Platform.OS === 'android' ? profileImage : profileImage.replace('file://', ''),
-          name: `avatar.${fileExt}`,
-          type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+          uri: localUri,
+          name: filename,
+          type: type,
         } as any);
+
+        console.log('[UPLOAD] File staged:', { filename, type, uri: localUri.substring(0, 80) });
       }
 
-      // 3. Send to Django API
-      await apiClient.put('user/', formData, {
+      // 3. Get auth token for the request header
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        Alert.alert(t.error || 'Error', 'Session expired. Please log in again.');
+        setIsSaving(false);
+        return;
+      }
+
+      // 4. Use native fetch instead of Axios — Axios has a known bug on
+      //    React Native Android where it fails to generate correct
+      //    multipart/form-data boundaries, causing silent Network Errors.
+      //    Native fetch handles FormData correctly on all RN platforms.
+      //    DO NOT set Content-Type — fetch auto-sets it with the boundary.
+      const response = await fetch('http://10.0.2.2:8000/accounts/settings/update/', {
+        method: 'PUT',
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${session.access_token}`,
+          // No Content-Type! fetch auto-sets 'multipart/form-data; boundary=...'
         },
+        body: formData,
       });
 
+      const responseData = await response.json();
+      console.log('[UPLOAD] Response:', response.status, responseData);
+
+      // 5. Handle errors
+      if (!response.ok) {
+        const serverMsg = responseData?.error || JSON.stringify(responseData);
+        console.error('[UPLOAD] Server rejected:', response.status, responseData);
+        Alert.alert('Upload Error', serverMsg);
+        return;
+      }
+
+      // 6. Success — refresh profile and go back
       await fetchUserFromDjango();
       Alert.alert(t.success || 'Success', t.profileUpdated || 'Profile updated successfully.');
       router.back();
     } catch (error: any) {
-      console.error('Failed to update profile:', error);
-      Alert.alert(t.error || 'Upload Error', 'Could not save changes. Please try again.');
+      console.error('[UPLOAD] Error:', error.message || error);
+      Alert.alert(t.error || 'Upload Error', 'Could not save changes. Please check your connection.');
     } finally {
       setIsSaving(false);
     }

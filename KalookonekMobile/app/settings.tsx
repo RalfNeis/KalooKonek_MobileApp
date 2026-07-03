@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
-import { LogOut, User, Bell, Shield, ChevronRight, Type, Globe, BellRing } from 'lucide-react-native';
+import { LogOut, User, Shield, ChevronRight, Type, Globe, BellRing, Smartphone, Mail } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useUserStore } from '../store/useUserStore';
 import { translations } from '../lib/i18n';
@@ -16,47 +16,62 @@ export default function Settings() {
   const t = translations[language];
 
   const [pushEnabled, setPushEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(false);
 
   useEffect(() => {
     if (user?.patient_info) {
       setPushEnabled((user.patient_info as any).wants_push ?? true);
+      setEmailEnabled((user.patient_info as any).wants_email ?? false);
+      setSmsEnabled((user.patient_info as any).wants_sms ?? false);
     }
   }, [user]);
 
-  const togglePush = async (newValue: boolean) => {
-    setPushEnabled(newValue);
+  const toggleNotification = async (
+    type: 'push' | 'email' | 'sms',
+    newValue: boolean,
+    setter: (val: boolean) => void
+  ) => {
+    const previous = type === 'push' ? pushEnabled : type === 'email' ? emailEnabled : smsEnabled;
+    setter(newValue);
+
+    const endpoints: Record<string, string> = {
+      push: 'accounts/settings/push-notifications/',
+      email: 'accounts/settings/email-notifications/',
+      sms: 'accounts/settings/sms-notifications/',
+    };
+
+    const bodyKeys: Record<string, string> = {
+      push: 'wants_push',
+      email: 'wants_email',
+      sms: 'wants_sms',
+    };
 
     try {
-      const updatedPatientInfo = {
-        ...(user?.patient_info || {}),
-        wants_push: newValue,
-      };
-
       const { data: { session } } = await supabase.auth.getSession();
       const baseUrl = apiClient.defaults.baseURL || 'http://10.0.2.2:8000/';
 
-      const response = await fetch(`${baseUrl}user/`, {
+      const response = await fetch(`${baseUrl}${endpoints[type]}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ patient_info: updatedPatientInfo }),
+        body: JSON.stringify({ [bodyKeys[type]]: newValue }),
       });
 
       if (!response.ok) {
-        const errorHtml = await response.text();
-        const cleanError = errorHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 250);
-        throw new Error(`Django Crash: ${cleanError}`);
+        const errorText = await response.text();
+        const cleanError = errorText.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 250);
+        throw new Error(cleanError);
       }
 
       fetchUserFromDjango();
-      
     } catch (error: any) {
-      console.error('Failed to update notification settings:', error);
-      Alert.alert('Backend Error', error.message || 'Could not save changes.');
-      setPushEnabled(!newValue);
+      console.error(`Failed to update ${type} notification:`, error);
+      Alert.alert('Error', error.message || 'Could not save changes.');
+      setter(previous); // Revert on failure
     }
   };
 
@@ -150,7 +165,7 @@ export default function Settings() {
           </View>
         </View>
 
-        <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-8 shadow-sm border border-gray-100">
+        <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-6 shadow-sm border border-gray-100">
           <MenuItem icon={User} label={t.personalInfo} onPress={() => router.push('/personal-info')} />
           <MenuItem icon={Shield} label={t.privacy} onPress={() => router.push('/security')} />
         </View>
@@ -160,18 +175,70 @@ export default function Settings() {
         </Text>
         
         <View className="bg-white rounded-2xl p-4 mb-8 shadow-sm border border-gray-100">
-          <View className="flex-row items-center justify-between min-h-[56px]">
+          {/* Push Notifications */}
+          <View className="flex-row items-center justify-between min-h-[56px] border-b border-gray-50 pb-4">
             <View className="flex-row items-center flex-1 pr-4">
               <View className="bg-blue-50 p-2 rounded-lg mr-3">
                 <BellRing size={20} color="#3B82F6" />
               </View>
-              <Text className="text-gray-700 font-medium flex-1 flex-wrap" style={{ fontSize: 16 * textScale }}>
-                {t.pushNotifs || 'Push Notifications'}
-              </Text>
+              <View className="flex-1">
+                <Text className="text-gray-700 font-medium flex-wrap" style={{ fontSize: 16 * textScale }}>
+                  {t.pushNotifs || 'Push Notifications'}
+                </Text>
+                <Text className="text-xs text-gray-400 mt-0.5 flex-wrap">
+                  {t.pushDesc || 'Alerts for appointments & updates'}
+                </Text>
+              </View>
             </View>
             <Switch 
               value={pushEnabled} 
-              onValueChange={togglePush} 
+              onValueChange={(val) => toggleNotification('push', val, setPushEnabled)} 
+              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+              thumbColor="white"
+            />
+          </View>
+
+          {/* Email Notifications */}
+          <View className="flex-row items-center justify-between min-h-[56px] border-b border-gray-50 py-4">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-purple-50 p-2 rounded-lg mr-3">
+                <Mail size={20} color="#8B5CF6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-700 font-medium flex-wrap" style={{ fontSize: 16 * textScale }}>
+                  {t.emailUpdates || 'Email Updates'}
+                </Text>
+                <Text className="text-xs text-gray-400 mt-0.5 flex-wrap">
+                  {t.emailDesc || 'Receive summaries via email'}
+                </Text>
+              </View>
+            </View>
+            <Switch 
+              value={emailEnabled} 
+              onValueChange={(val) => toggleNotification('email', val, setEmailEnabled)} 
+              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+              thumbColor="white"
+            />
+          </View>
+
+          {/* SMS Notifications */}
+          <View className="flex-row items-center justify-between min-h-[56px] pt-4">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-emerald-50 p-2 rounded-lg mr-3">
+                <Smartphone size={20} color="#10B981" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-700 font-medium flex-wrap" style={{ fontSize: 16 * textScale }}>
+                  {t.smsTexts || 'SMS Text Messages'}
+                </Text>
+                <Text className="text-xs text-gray-400 mt-0.5 flex-wrap">
+                  {t.smsDesc || 'Text reminders to your phone'}
+                </Text>
+              </View>
+            </View>
+            <Switch 
+              value={smsEnabled} 
+              onValueChange={(val) => toggleNotification('sms', val, setSmsEnabled)} 
               trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
               thumbColor="white"
             />
@@ -189,4 +256,4 @@ export default function Settings() {
       </ScrollView>
     </View>
   );
-}
+}

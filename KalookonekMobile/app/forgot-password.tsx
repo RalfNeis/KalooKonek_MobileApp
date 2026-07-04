@@ -1,12 +1,37 @@
 /// <reference types="nativewind/types" />
-import React from 'react';
-import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Phone } from 'lucide-react-native';
+import { ArrowLeft, Mail } from 'lucide-react-native';
+import { apiClient } from '../api/client';
 
 export default function ForgotPassword() {
   const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleReset = async () => {
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await apiClient.post('emails/password-reset/', { email: email.trim() });
+      
+      Alert.alert('Success', 'If that email is registered, a reset link has been sent.', [
+        { text: 'OK', onPress: () => router.replace('/login') }
+      ]);
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      Alert.alert('Error', 'Failed to send password reset link. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 bg-red-600">
@@ -22,23 +47,34 @@ export default function ForgotPassword() {
         <View className="flex-1 bg-white rounded-t-[40px] px-8 pt-10 pb-8 shadow-xl">
           <Text className="text-3xl font-bold text-gray-900 mb-4">Forgot Password?</Text>
           <Text className="text-gray-500 text-sm mb-10 leading-relaxed">
-            Enter the mobile number associated with your account. We will send you instructions to reset your password.
+            Enter the email address associated with your account. We will send you instructions to reset your password.
           </Text>
 
           <View className="mb-8">
-            <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Mobile Number</Text>
+            <Text className="text-gray-700 font-bold text-sm mb-2 ml-1">Email Address</Text>
             <View className="flex-row items-center bg-gray-50 border border-gray-200 rounded-2xl px-4 h-14">
-              <Phone size={20} color="#9CA3AF" className="mr-3" />
+              <Mail size={20} color="#9CA3AF" className="mr-3" />
               <TextInput 
                 className="flex-1 text-gray-900 text-base"
-                placeholder="09XX-XXX-XXXX"
-                keyboardType="phone-pad"
+                placeholder="you@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
             </View>
           </View>
 
-          <TouchableOpacity className="w-full bg-red-600 rounded-2xl py-4 items-center shadow-sm mb-6">
-            <Text className="text-white font-bold text-lg">Send Reset Link</Text>
+          <TouchableOpacity 
+            className="w-full bg-red-600 rounded-2xl py-4 items-center shadow-sm mb-6"
+            onPress={handleReset}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text className="text-white font-bold text-lg">Send Reset Link</Text>
+            )}
           </TouchableOpacity>
 
           <View className="flex-row justify-center items-center gap-1">

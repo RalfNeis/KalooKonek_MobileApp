@@ -33,25 +33,14 @@ export default function Login() {
       return; 
     } 
 
-    // 2. Fetch the profile from Django using native fetch to bypass Axios completely
+    // 2. Fetch the profile from Django using your configured Axios client!
     try {
-      const baseUrl = (apiClient.defaults.baseURL || 'http://10.0.2.2:8000').replace(/\/$/, '');
+      const response = await apiClient.get('user/', {
+        // Force the fresh token just in case the interceptor is slow
+        headers: { Authorization: `Bearer ${data.session.access_token}` }
+      });
 
-        const response = await fetch(`${baseUrl}/user/`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${data.session.access_token}`,
-            'Accept': 'application/json'
-          }
-        });
-
-      if (!response.ok) {
-        throw new Error(`Server returned status: ${response.status}`);
-      }
-
-      const profileData = await response.json();
-      
-      // FIX 2: Look for the role in the correct place!
+      const profileData = response.data;
       const userRole = profileData.role; 
 
       // THE BOUNCER: Block Admins and Staff
@@ -70,8 +59,24 @@ export default function Login() {
       router.replace('/(tabs)');
 
     } catch (err: any) {
-      console.error("Profile check failed:", err);
-      Alert.alert('Login Error', 'Could not verify your account role with the server.');
+      console.error("Profile check failed:", err?.response?.status, err?.response?.data || err);
+      
+      const status = err.response?.status;
+      const serverMsg = err.response?.data?.error;
+
+      if (status === 401) {
+        Alert.alert(
+          'Database Sync Error', 
+          'Your account exists in Auth, but is missing from the local Django database. Please register a new account.'
+        );
+      } else if (status === 403) {
+        Alert.alert(
+          'Account Pending', 
+          serverMsg || 'Your account is pending approval by an administrator. Please wait for approval.'
+        );
+      } else {
+        Alert.alert('Login Error', serverMsg || 'Could not verify your account role with the server.');
+      }
       
       await supabase.auth.signOut();
       setIsLoading(false);

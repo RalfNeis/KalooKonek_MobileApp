@@ -11,6 +11,12 @@ export default function HealthRecords() {
   // ADDED: isLoading and fetchDashboardFromDjango for the refresh control
   const { dashboard, isLoading, fetchDashboardFromDjango } = useUserStore();
 
+  // Extract latest vitals from the most recent record
+  const latestRecord = dashboard?.recent_records?.[0] || null;
+  const latestBP = latestRecord?.blood_pressure || '--';
+  const latestWeight = latestRecord?.weight ? `${latestRecord.weight} kg` : '--';
+  const lastChecked = latestRecord?.visit_date || '--';
+
   return (
     <ScrollView 
       className="flex-1 bg-[#F8F9FA] p-4"
@@ -19,18 +25,20 @@ export default function HealthRecords() {
     >
       <Text className="text-gray-500 text-sm mb-6">View your medical history and vital signs.</Text>
       
-      {/* Vitals Cards (Set to "--" until a dedicated vitals endpoint is added) */}
+      {/* Vitals Cards — Now reads from the latest medical record */}
       <View className="flex-row flex-wrap justify-between mb-6">
         <View className="w-[48%] bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center mb-4">
           <Heart color="#3B82F6" size={24} className="mb-2" />
           <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Blood Pressure</Text>
-          <Text className="text-2xl font-bold text-gray-900">--</Text>
+          <Text className="text-2xl font-bold text-gray-900">{latestBP}</Text>
         </View>
 
         <View className="w-[48%] bg-white p-4 rounded-2xl border border-gray-100 shadow-sm items-center mb-4">
           <Activity color="#EF4444" size={24} className="mb-2" />
-          <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Blood Sugar</Text>
-          <Text className="text-2xl font-bold text-gray-900">--</Text>
+          <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Temperature</Text>
+          <Text className="text-2xl font-bold text-gray-900">
+            {latestRecord?.temperature ? `${latestRecord.temperature}°C` : '--'}
+          </Text>
         </View>
 
         <View className="w-[100%] bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex-row items-center justify-between">
@@ -38,10 +46,10 @@ export default function HealthRecords() {
             <Scale color="#F59E0B" size={24} />
             <View>
               <Text className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Weight</Text>
-              <Text className="text-2xl font-bold text-gray-900">--</Text>
+              <Text className="text-2xl font-bold text-gray-900">{latestWeight}</Text>
             </View>
           </View>
-          <Text className="text-gray-400 text-[10px]">Last checked: --</Text>
+          <Text className="text-gray-400 text-[10px]">Last checked: {lastChecked}</Text>
         </View>
       </View>
 

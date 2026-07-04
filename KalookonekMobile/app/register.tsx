@@ -74,7 +74,7 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      const response = await apiClient.post('accounts/create/', {
+      const response = await apiClient.post('emails/signup/send-otp/', {
         first_name: firstName,
         last_name: lastName,
         email: email.trim(),
@@ -85,9 +85,15 @@ export default function Register() {
         phone_number: fullMobileNumber, 
       });
 
-      Alert.alert('Request Sent!', 'Your registration request has been sent to the Barangay Staff for approval.', [
-        { text: 'OK', onPress: () => router.replace('/login') }
-      ]);
+      router.push({
+        pathname: '/otp-verification',
+        params: {
+          email: email.trim(),
+          password: password,
+          action: 'signup'
+        }
+      });
+
 
     } catch (error: any) {
       console.error("Registration error:", error);

@@ -16,7 +16,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [isOffline, setIsOffline] = useState(false);
   
-  const { user, dashboard, fetchUserFromDjango, fetchDashboardFromDjango, isLoading, language } = useUserStore();
+  const { user, dashboard, fetchUserFromDjango, fetchDashboardFromDjango, isLoading, language, lastUpdated } = useUserStore();
   const firstName = user?.first_name || 'Citizen';
   const t = translations[language]; 
   
@@ -85,7 +85,12 @@ export default function Dashboard() {
             <View className="bg-white/20 p-2 rounded-xl"><ShieldAlert size={20} color="white" /></View>
             <View>
               <Text className="text-[10px] uppercase tracking-wider font-bold text-white/90">{t.seniorCitizenId}</Text>
-              <Text className="font-medium text-sm text-white">{t.city}</Text>
+              <Text className="font-medium text-sm text-white">
+                {(user?.barangay || user?.patient_info?.barangay)
+                  ? `Brgy. ${(user?.barangay || user?.patient_info?.barangay)?.replace(/^(brgy\.?|barangay)\s*/i, '')}, `
+                  : ''}
+                {t.city}
+              </Text>
             </View>
           </View>
         </View>
@@ -96,8 +101,8 @@ export default function Dashboard() {
             <Image 
               source={{ 
                 uri: (user as any).profile_picture.startsWith('http') 
-                  ? (user as any).profile_picture 
-                  : `${SUPABASE_PIC_URL}${(user as any).profile_picture}` 
+                  ? `${(user as any).profile_picture}?t=${lastUpdated || Date.now()}` 
+                  : `${SUPABASE_PIC_URL}${(user as any).profile_picture}?t=${lastUpdated || Date.now()}` 
               }} 
               className="w-full h-full" 
             />
@@ -113,9 +118,9 @@ export default function Dashboard() {
               
               {/* Note: This explicitly forces Barangay or defaults to Caloocan City */}
               <Text className="text-xs text-gray-500 mt-2 mb-6 text-center font-medium">
-              {user.patient_info?.barangay 
-              ? `Brgy. ${user.patient_info.barangay.replace(/^(brgy\.?|barangay)\s*/i, '')}, Caloocan City` 
-              : 'Caloocan City'}
+              {(user.barangay || user.patient_info?.barangay)
+              ? `Brgy. ${(user.barangay || user.patient_info?.barangay)?.replace(/^(brgy\.?|barangay)\s*/i, '')}, ${t.city || 'Caloocan City'}` 
+              : (t.city || 'Caloocan City')}
               </Text>
             </>
           ) : (

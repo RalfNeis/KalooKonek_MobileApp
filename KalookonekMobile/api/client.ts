@@ -13,6 +13,7 @@ export const apiClient = axios.create({
 });
 
 // Auto-attach JWT Token to every request
+// and handle FormData content-type correctly
 apiClient.interceptors.request.use(async (config) => {
   // Directly ask Supabase for the active token
   const { data: { session } } = await supabase.auth.getSession();
@@ -20,5 +21,13 @@ apiClient.interceptors.request.use(async (config) => {
   if (session?.access_token) {
     config.headers.Authorization = `Bearer ${session.access_token}`;
   }
+
+  // If sending FormData, delete Content-Type so React Native's XHR
+  // auto-sets 'multipart/form-data; boundary=...' with the correct boundary.
+  // Without this, the default 'application/json' header would corrupt the upload.
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   return config;
 });

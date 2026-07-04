@@ -1,18 +1,120 @@
 /// <reference types="nativewind/types" />
-import React from 'react';
-import { View, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, Alert, ScrollView, Switch, Linking, Modal } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
-import { LogOut, User, Bell, Shield, ChevronRight, Type, Globe } from 'lucide-react-native';
+import { LogOut, User, Shield, ChevronRight, Type, Globe, BellRing, Smartphone, Mail, Lock, Fingerprint, HelpCircle, FileText, Info, CreditCard, X, Phone, Facebook, LockKeyhole, ShieldCheck, KeyRound } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useUserStore } from '../store/useUserStore';
 import { translations } from '../lib/i18n';
-
+import { apiClient } from '../api/client';
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
 export default function Settings() {
   const router = useRouter();
   
-  const { clearUser, language, setLanguage, textScale, setTextScale } = useUserStore();
+  const { user, fetchUserFromDjango, clearUser, language, setLanguage, textScale, setTextScale } = useUserStore();
   const t = translations[language];
+
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(false);
+
+  useEffect(() => {
+    if (user?.patient_info) {
+      setPushEnabled((user.patient_info as any).wants_push ?? true);
+      setEmailEnabled((user.patient_info as any).wants_email ?? false);
+      setSmsEnabled((user.patient_info as any).wants_sms ?? false);
+    }
+    
+    const loadSecureSettings = async () => {
+      const pinStr = await SecureStore.getItemAsync('pin_enabled');
+      const bioStr = await SecureStore.getItemAsync('biometrics_enabled');
+      setPinEnabled(pinStr === 'true');
+      setBiometricsEnabled(bioStr === 'true');
+    };
+    loadSecureSettings();
+  }, [user]);
+  const toggleNotification = async (
+    type: 'push' | 'email' | 'sms',
+    newValue: boolean,
+    setter: (val: boolean) => void
+  ) => {
+    const previous = type === 'push' ? pushEnabled : type === 'email' ? emailEnabled : smsEnabled;
+    setter(newValue);
+
+    const endpoints: Record<string, string> = {
+      push: 'accounts/settings/push-notifications/',
+      email: 'accounts/settings/email-notifications/',
+      sms: 'accounts/settings/sms-notifications/',
+    };
+
+    const bodyKeys: Record<string, string> = {
+      push: 'wants_push',
+      email: 'wants_email',
+      sms: 'wants_sms',
+    };
+
+    try {
+      await apiClient.put(endpoints[type], {
+        [bodyKeys[type]]: newValue
+      });
+      fetchUserFromDjango();
+    } catch (error: any) {
+      console.error(`Failed to update ${type} notification:`, error);
+      Alert.alert('Error', error.response?.data?.error || 'Could not save changes.');
+      setter(previous); // Revert on failure
+    }
+  };
+
+  const handleBiometricToggle = async (val: boolean) => {
+    if (val) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert('Unsupported', 'Your device does not support or have biometrics set up.');
+        return;
+      }
+      
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Enable Biometric Login',
+      });
+      
+      if (result.success) {
+        setBiometricsEnabled(true);
+        await SecureStore.setItemAsync('biometrics_enabled', 'true');
+      }
+    } else {
+      setBiometricsEnabled(false);
+      await SecureStore.deleteItemAsync('biometrics_enabled');
+    }
+  };
+
+  const handleDisablePin = () => {
+    Alert.alert('Disable PIN', 'Are you sure you want to disable Quick Login?', [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Disable', 
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.post('accounts/settings/disable-pin/');
+            await SecureStore.deleteItemAsync('pin_enabled');
+            await SecureStore.deleteItemAsync('biometrics_enabled');
+            setPinEnabled(false);
+            setBiometricsEnabled(false);
+            Alert.alert('Success', 'Quick Login PIN has been disabled.');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to disable PIN.');
+          }
+        }
+      }
+    ]);
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -56,6 +158,16 @@ export default function Settings() {
 
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         
+        {/* ACCOUNT SECTION */}
+        <Text className="text-gray-500 font-bold mb-3 ml-2 uppercase tracking-wider" style={{ fontSize: 12 * textScale }}>
+          Account
+        </Text>
+        <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-6 shadow-sm border border-gray-100">
+          <MenuItem icon={User} label="Edit Profile Info" onPress={() => router.push('/personal-info')} />
+          <MenuItem icon={CreditCard} label="View OSCA ID" onPress={() => router.push('/qrcode')} />
+        </View>
+
+        {/* ACCESSIBILITY SECTION */}
         <Text className="text-gray-500 font-bold mb-3 ml-2 uppercase tracking-wider" style={{ fontSize: 12 * textScale }}>
           {t.accessibility}
         </Text>
@@ -104,10 +216,129 @@ export default function Settings() {
           </View>
         </View>
 
+        {/* PRIVACY & SECURITY SECTION */}
+        <Text className="text-gray-500 font-bold mb-3 ml-2 uppercase tracking-wider" style={{ fontSize: 12 * textScale }}>
+          Privacy & Security
+        </Text>
+        <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-6 shadow-sm border border-gray-100">
+          <MenuItem icon={Lock} label="Change Password" onPress={() => router.push('/change-password')} />
+          
+          {!pinEnabled ? (
+            <MenuItem icon={ShieldCheck} label="Setup Quick Login PIN" onPress={() => router.push('/settings/pin-setup')} />
+          ) : (
+            <>
+              <MenuItem icon={LockKeyhole} label="Change Quick Login PIN" onPress={() => router.push('/settings/pin-change')} />
+              <MenuItem icon={KeyRound} label="Disable Quick Login PIN" onPress={handleDisablePin} />
+              <View className="flex-row items-center justify-between py-4 min-h-[64px]">
+                <View className="flex-row items-center flex-1 pr-4">
+                  <View className="bg-gray-50 p-2 rounded-lg mr-3">
+                    <Fingerprint size={20} color="#4B5563" />
+                  </View>
+                  <Text className="text-gray-700 font-medium flex-1 flex-wrap leading-relaxed" style={{ fontSize: 16 * textScale }}>Enable Biometric Login</Text>
+                </View>
+                <Switch 
+                  value={biometricsEnabled} 
+                  onValueChange={handleBiometricToggle} 
+                  trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+                  thumbColor="white"
+                />
+              </View>
+            </>
+          )}
+        </View>
+
+        {/* NOTIFICATIONS SECTION */}
+        <Text className="text-gray-500 font-bold mb-3 ml-2 uppercase tracking-wider" style={{ fontSize: 12 * textScale }}>
+          {t.notifications || 'Notifications'}
+        </Text>
+        
+        <View className="bg-white rounded-2xl p-4 mb-8 shadow-sm border border-gray-100">
+          {/* Push Notifications */}
+          <View className="flex-row items-center justify-between min-h-[56px] border-b border-gray-50 pb-4">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-blue-50 p-2 rounded-lg mr-3">
+                <BellRing size={20} color="#3B82F6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-700 font-medium flex-wrap" style={{ fontSize: 16 * textScale }}>
+                  {t.pushNotifs || 'Push Notifications'}
+                </Text>
+                <Text className="text-xs text-gray-400 mt-0.5 flex-wrap">
+                  {t.pushDesc || 'Alerts for appointments & updates'}
+                </Text>
+              </View>
+            </View>
+            <Switch 
+              value={pushEnabled} 
+              onValueChange={(val) => toggleNotification('push', val, setPushEnabled)} 
+              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+              thumbColor="white"
+            />
+          </View>
+
+          {/* Email Notifications */}
+          <View className="flex-row items-center justify-between min-h-[56px] border-b border-gray-50 py-4">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-purple-50 p-2 rounded-lg mr-3">
+                <Mail size={20} color="#8B5CF6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-700 font-medium flex-wrap" style={{ fontSize: 16 * textScale }}>
+                  {t.emailUpdates || 'Email Updates'}
+                </Text>
+                <Text className="text-xs text-gray-400 mt-0.5 flex-wrap">
+                  {t.emailDesc || 'Receive summaries via email'}
+                </Text>
+              </View>
+            </View>
+            <Switch 
+              value={emailEnabled} 
+              onValueChange={(val) => toggleNotification('email', val, setEmailEnabled)} 
+              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+              thumbColor="white"
+            />
+          </View>
+
+          {/* SMS Notifications */}
+          <View className="flex-row items-center justify-between min-h-[56px] pt-4">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-emerald-50 p-2 rounded-lg mr-3">
+                <Smartphone size={20} color="#10B981" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-700 font-medium flex-wrap" style={{ fontSize: 16 * textScale }}>
+                  {t.smsTexts || 'SMS Text Messages'}
+                </Text>
+                <Text className="text-xs text-gray-400 mt-0.5 flex-wrap">
+                  {t.smsDesc || 'Text reminders to your phone'}
+                </Text>
+              </View>
+            </View>
+            <Switch 
+              value={smsEnabled} 
+              onValueChange={(val) => toggleNotification('sms', val, setSmsEnabled)} 
+              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+              thumbColor="white"
+            />
+          </View>
+        </View>
+
+        {/* SUPPORT & ABOUT SECTION */}
+        <Text className="text-gray-500 font-bold mb-3 ml-2 uppercase tracking-wider" style={{ fontSize: 12 * textScale }}>
+          Support & About
+        </Text>
         <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-8 shadow-sm border border-gray-100">
-          <MenuItem icon={User} label={t.personalInfo} onPress={() => router.push('/personal-info')} />
-          <MenuItem icon={Bell} label={t.notifications} onPress={() => router.push('/notifications')} />
-          <MenuItem icon={Shield} label={t.privacy} onPress={() => router.push('/security')} />
+          <MenuItem icon={HelpCircle} label="Contact Barangay" onPress={() => setShowContactModal(true)} />
+          <MenuItem icon={FileText} label="Terms of Service" onPress={() => router.push('/terms')} />
+          <View className="flex-row items-center justify-between py-4 min-h-[64px]">
+            <View className="flex-row items-center flex-1 pr-4">
+              <View className="bg-gray-50 p-2 rounded-lg mr-3">
+                <Info size={20} color="#4B5563" />
+              </View>
+              <Text className="text-gray-700 font-medium flex-1 flex-wrap leading-relaxed" style={{ fontSize: 16 * textScale }}>App Version</Text>
+            </View>
+            <Text className="text-gray-400 font-medium">1.0.0</Text>
+          </View>
         </View>
 
         <TouchableOpacity 
@@ -119,6 +350,61 @@ export default function Settings() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Contact Barangay Modal */}
+      <Modal visible={showContactModal} transparent animationType="fade">
+        <View className="flex-1 bg-black/50 justify-center items-center px-6">
+          <View className="bg-white rounded-3xl w-full p-6 shadow-2xl">
+            <View className="flex-row justify-between items-center border-b border-gray-100 pb-4 mb-4">
+              <Text className="font-bold text-gray-900" style={{ fontSize: 20 * textScale }}>Administrative Contact</Text>
+              <TouchableOpacity onPress={() => setShowContactModal(false)} className="p-2 bg-gray-50 rounded-full">
+                <X size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="mb-6">
+              <Text className="text-gray-500 font-bold uppercase tracking-wider mb-2" style={{ fontSize: 12 * textScale }}>Office Hours</Text>
+              <Text className="text-gray-800 font-medium" style={{ fontSize: 16 * textScale }}>8:00 AM - 5:00 PM</Text>
+              <Text className="text-gray-600 mt-1" style={{ fontSize: 14 * textScale }}>Monday to Friday</Text>
+            </View>
+
+            <TouchableOpacity 
+              onPress={() => Linking.openURL('tel:09123456789')}
+              className="flex-row items-center bg-gray-50 p-4 rounded-2xl mb-3 border border-gray-100"
+            >
+              <View className="bg-green-100 p-2 rounded-full mr-4">
+                <Phone size={20} color="#16A34A" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-500 text-xs font-bold uppercase">Phone Number</Text>
+                <Text className="text-gray-900 font-medium mt-1" style={{ fontSize: 16 * textScale }}>0912 345 6789</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => Linking.openURL('mailto:support@caloocancity.gov.ph')}
+              className="flex-row items-center bg-gray-50 p-4 rounded-2xl mb-6 border border-gray-100"
+            >
+              <View className="bg-blue-100 p-2 rounded-full mr-4">
+                <Mail size={20} color="#2563EB" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-gray-500 text-xs font-bold uppercase">Email Address</Text>
+                <Text className="text-gray-900 font-medium mt-1" style={{ fontSize: 16 * textScale }}>support@caloocancity.gov.ph</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => Linking.openURL('https://facebook.com')}
+              className="w-full bg-[#1877F2] rounded-2xl py-4 flex-row justify-center items-center shadow-sm"
+            >
+              <Facebook size={20} color="white" className="mr-2" />
+              <Text className="text-white font-bold" style={{ fontSize: 16 * textScale }}>Visit Official Facebook Page</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
-}
+}

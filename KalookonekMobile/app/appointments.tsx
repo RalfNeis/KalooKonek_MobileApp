@@ -1,6 +1,6 @@
 /// <reference types="nativewind/types" />
-import React, { useState } from 'react';
-import { ScrollView, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { ScrollView, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform, RefreshControl } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { Calendar as CalendarIcon } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -8,7 +8,14 @@ import { useUserStore } from '../store/useUserStore';
 import { apiClient } from '../api/client';
 
 export default function Appointments() {
-  const { dashboard, fetchDashboardFromDjango } = useUserStore();
+  const { dashboard, fetchDashboardFromDjango, isLoading } = useUserStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchDashboardFromDjango();
+    setIsRefreshing(false);
+  }, [fetchDashboardFromDjango]);
 
   // Form State - Completely changed and blank by default!
   const [appointmentName, setAppointmentName] = useState(''); 
@@ -70,15 +77,32 @@ export default function Appointments() {
       ]);
       
     } catch (error: any) {
-      console.error("Booking error:", error);
-      Alert.alert('Error', 'Failed to send your request. Please check your connection and try again.');
+      console.error("Booking error:", error?.response?.data || error);
+      const serverMsg = error?.response?.data?.error;
+      if (error?.response?.status === 403) {
+        Alert.alert('Account Pending', serverMsg || 'Your account is still pending approval by an administrator.');
+      } else if (error?.response?.status === 404) {
+        Alert.alert('Profile Missing', serverMsg || 'No patient profile found. Please contact support.');
+      } else {
+        Alert.alert('Error', serverMsg || 'Failed to send your request. Please check your connection and try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <ScrollView className="flex-1 bg-[#F8F9FA] p-5">
+    <ScrollView 
+      className="flex-1 bg-[#F8F9FA] p-5"
+      refreshControl={
+        <RefreshControl 
+          refreshing={isRefreshing} 
+          onRefresh={handleRefresh} 
+          colors={['#DC2626']} 
+          tintColor="#DC2626" 
+        />
+      }
+    >
       <Text className="text-gray-500 text-sm mb-6 leading-relaxed">
         Schedule your next visit to the Health Center.
       </Text>

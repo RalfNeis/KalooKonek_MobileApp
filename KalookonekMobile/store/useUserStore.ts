@@ -24,6 +24,7 @@ interface UserData {
   role: string;
   phone_number: string;
   osca_id?: string;
+  barangay?: string;
   patient_info: PatientInfo | null;
   profile_picture?: string | null; // <--- THE CRUCIAL MISSING PIECE!
 }

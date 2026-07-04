@@ -14,42 +14,56 @@ export default function Emergency() {
   const t = translations[language]; // Get the right words
   const [isLocating, setIsLocating] = useState(false);
 
+  // Extract barangay number. e.g., "Brgy. 105" -> "105"
+  const barangayNumber = user?.patient_info?.barangay?.replace(/[^0-9]/g, '') || '';
+  
+  // Mapping of barangay hotlines. Fallback to 122 if not listed.
+  const barangayHotlines: Record<string, string> = {
+    '105': '09123456789', // Example dynamically assigned number
+    '106': '09987654321',
+  };
+  const dynamicHotline = barangayHotlines[barangayNumber] || '122';
+
   // --- 1. THE SOS LONG-PRESS LOGIC ---
   const handleSOS = async () => {
     setIsLocating(true);
+    let mapsLink = '';
+
     try {
+      // 1. Attempt to get location, but DO NOT block if denied
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(t.permissionDenied, t.locationPermissionMsg);
-        setIsLocating(false);
-        return;
+      if (status === 'granted') {
+        let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        const { latitude, longitude } = location.coords;
+        mapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+      } else {
+        console.warn("Location permission denied. Sending SOS without coordinates.");
       }
+    } catch (error) {
+      console.warn("Failed to fetch location. Proceeding without coordinates.", error);
+    }
 
-      let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = location.coords;
-      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-
+    try {
+      // 2. Attempt to send SMS
       const guardianNumber = user?.patient_info?.emergency_contact_number || '';
-      const barangayHotline = '09123456789'; 
-
       const isAvailable = await SMS.isAvailableAsync();
       
       if (isAvailable) {
-        // Construct the translated SMS message
-        const smsMessage = `${t.sosHelp} \n\n${t.sosName}: ${user?.first_name} ${user?.last_name}\n${t.sosLocation}: ${mapsLink}`;
+        const locationText = mapsLink ? `\n${t.sosLocation}: ${mapsLink}` : `\n(Location Unavailable)`;
+        const smsMessage = `${t.sosHelp} \n\n${t.sosName}: ${user?.first_name} ${user?.last_name}${locationText}`;
         
         await SMS.sendSMSAsync(
-          [guardianNumber, barangayHotline].filter(Boolean), 
+          [guardianNumber, dynamicHotline].filter(Boolean), 
           smsMessage
         );
-      } else {
-        Alert.alert(t.error, t.smsNotAvailable);
       }
-
     } catch (error) {
-      Alert.alert(t.error, t.locationError);
+      console.warn("SMS failed or cancelled.", error);
     } finally {
       setIsLocating(false);
+      
+      // 3. ULTIMATE FAIL-SAFE: Unconditionally trigger native cellular call
+      Linking.openURL(`tel:${dynamicHotline}`);
     }
   };
 
@@ -58,7 +72,7 @@ export default function Emergency() {
   };
 
   const callBarangay = () => {
-    Linking.openURL('tel:122'); 
+    Linking.openURL(`tel:${dynamicHotline}`); 
   };
 
   return (

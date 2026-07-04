@@ -85,7 +85,12 @@ export default function Dashboard() {
             <View className="bg-white/20 p-2 rounded-xl"><ShieldAlert size={20} color="white" /></View>
             <View>
               <Text className="text-[10px] uppercase tracking-wider font-bold text-white/90">{t.seniorCitizenId}</Text>
-              <Text className="font-medium text-sm text-white">{t.city}</Text>
+              <Text className="font-medium text-sm text-white">
+                {(user?.barangay || user?.patient_info?.barangay)
+                  ? `Brgy. ${(user?.barangay || user?.patient_info?.barangay)?.replace(/^(brgy\.?|barangay)\s*/i, '')}, `
+                  : ''}
+                {t.city}
+              </Text>
             </View>
           </View>
         </View>
@@ -113,9 +118,9 @@ export default function Dashboard() {
               
               {/* Note: This explicitly forces Barangay or defaults to Caloocan City */}
               <Text className="text-xs text-gray-500 mt-2 mb-6 text-center font-medium">
-              {user.patient_info?.barangay 
-              ? `Brgy. ${user.patient_info.barangay.replace(/^(brgy\.?|barangay)\s*/i, '')}, Caloocan City` 
-              : 'Caloocan City'}
+              {(user.barangay || user.patient_info?.barangay)
+              ? `Brgy. ${(user.barangay || user.patient_info?.barangay)?.replace(/^(brgy\.?|barangay)\s*/i, '')}, ${t.city || 'Caloocan City'}` 
+              : (t.city || 'Caloocan City')}
               </Text>
             </>
           ) : (

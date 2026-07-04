@@ -3,12 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, Alert, ScrollView, Switch, Linking, Modal } from 'react-native';
 import { GlobalText as Text } from '../components/GlobalText';
 import { useRouter } from 'expo-router';
-import { LogOut, User, Shield, ChevronRight, Type, Globe, BellRing, Smartphone, Mail, Lock, Fingerprint, HelpCircle, FileText, Info, CreditCard, X, Phone, Facebook } from 'lucide-react-native';
+import { LogOut, User, Shield, ChevronRight, Type, Globe, BellRing, Smartphone, Mail, Lock, Fingerprint, HelpCircle, FileText, Info, CreditCard, X, Phone, Facebook, LockKeyhole, ShieldCheck, KeyRound } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useUserStore } from '../store/useUserStore';
 import { translations } from '../lib/i18n';
 import { apiClient } from '../api/client';
-
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
 export default function Settings() {
   const router = useRouter();
   
@@ -20,6 +21,7 @@ export default function Settings() {
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(false);
 
   useEffect(() => {
     if (user?.patient_info) {
@@ -27,8 +29,15 @@ export default function Settings() {
       setEmailEnabled((user.patient_info as any).wants_email ?? false);
       setSmsEnabled((user.patient_info as any).wants_sms ?? false);
     }
+    
+    const loadSecureSettings = async () => {
+      const pinStr = await SecureStore.getItemAsync('pin_enabled');
+      const bioStr = await SecureStore.getItemAsync('biometrics_enabled');
+      setPinEnabled(pinStr === 'true');
+      setBiometricsEnabled(bioStr === 'true');
+    };
+    loadSecureSettings();
   }, [user]);
-
   const toggleNotification = async (
     type: 'push' | 'email' | 'sms',
     newValue: boolean,
@@ -50,31 +59,61 @@ export default function Settings() {
     };
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const baseUrl = apiClient.defaults.baseURL || 'http://10.0.2.2:8000/';
-
-      const response = await fetch(`${baseUrl}${endpoints[type]}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ [bodyKeys[type]]: newValue }),
+      await apiClient.put(endpoints[type], {
+        [bodyKeys[type]]: newValue
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        const cleanError = errorText.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 250);
-        throw new Error(cleanError);
-      }
-
       fetchUserFromDjango();
     } catch (error: any) {
       console.error(`Failed to update ${type} notification:`, error);
-      Alert.alert('Error', error.message || 'Could not save changes.');
+      Alert.alert('Error', error.response?.data?.error || 'Could not save changes.');
       setter(previous); // Revert on failure
     }
+  };
+
+  const handleBiometricToggle = async (val: boolean) => {
+    if (val) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert('Unsupported', 'Your device does not support or have biometrics set up.');
+        return;
+      }
+      
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Enable Biometric Login',
+      });
+      
+      if (result.success) {
+        setBiometricsEnabled(true);
+        await SecureStore.setItemAsync('biometrics_enabled', 'true');
+      }
+    } else {
+      setBiometricsEnabled(false);
+      await SecureStore.deleteItemAsync('biometrics_enabled');
+    }
+  };
+
+  const handleDisablePin = () => {
+    Alert.alert('Disable PIN', 'Are you sure you want to disable Quick Login?', [
+      { text: 'Cancel', style: 'cancel' },
+      { 
+        text: 'Disable', 
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.post('accounts/settings/disable-pin/');
+            await SecureStore.deleteItemAsync('pin_enabled');
+            await SecureStore.deleteItemAsync('biometrics_enabled');
+            setPinEnabled(false);
+            setBiometricsEnabled(false);
+            Alert.alert('Success', 'Quick Login PIN has been disabled.');
+          } catch (error) {
+            Alert.alert('Error', 'Failed to disable PIN.');
+          }
+        }
+      }
+    ]);
   };
 
   const handleLogout = async () => {
@@ -183,20 +222,29 @@ export default function Settings() {
         </Text>
         <View className="bg-white rounded-2xl px-4 pt-2 pb-2 mb-6 shadow-sm border border-gray-100">
           <MenuItem icon={Lock} label="Change Password" onPress={() => router.push('/change-password')} />
-          <View className="flex-row items-center justify-between py-4 min-h-[64px]">
-            <View className="flex-row items-center flex-1 pr-4">
-              <View className="bg-gray-50 p-2 rounded-lg mr-3">
-                <Fingerprint size={20} color="#4B5563" />
+          
+          {!pinEnabled ? (
+            <MenuItem icon={ShieldCheck} label="Setup Quick Login PIN" onPress={() => router.push('/settings/pin-setup')} />
+          ) : (
+            <>
+              <MenuItem icon={LockKeyhole} label="Change Quick Login PIN" onPress={() => router.push('/settings/pin-change')} />
+              <MenuItem icon={KeyRound} label="Disable Quick Login PIN" onPress={handleDisablePin} />
+              <View className="flex-row items-center justify-between py-4 min-h-[64px]">
+                <View className="flex-row items-center flex-1 pr-4">
+                  <View className="bg-gray-50 p-2 rounded-lg mr-3">
+                    <Fingerprint size={20} color="#4B5563" />
+                  </View>
+                  <Text className="text-gray-700 font-medium flex-1 flex-wrap leading-relaxed" style={{ fontSize: 16 * textScale }}>Enable Biometric Login</Text>
+                </View>
+                <Switch 
+                  value={biometricsEnabled} 
+                  onValueChange={handleBiometricToggle} 
+                  trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
+                  thumbColor="white"
+                />
               </View>
-              <Text className="text-gray-700 font-medium flex-1 flex-wrap leading-relaxed" style={{ fontSize: 16 * textScale }}>Enable Biometric Login</Text>
-            </View>
-            <Switch 
-              value={biometricsEnabled} 
-              onValueChange={setBiometricsEnabled} 
-              trackColor={{ false: '#D1D5DB', true: '#EF4444' }}
-              thumbColor="white"
-            />
-          </View>
+            </>
+          )}
         </View>
 
         {/* NOTIFICATIONS SECTION */}

@@ -1,13 +1,25 @@
 /// <reference types="nativewind/types" />
+import React, { useState } from 'react';
 import { ScrollView, View, TouchableOpacity, RefreshControl } from 'react-native';
 import { GlobalText as Text } from '../../components/GlobalText';
 import { useRouter } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 import { useUserStore } from '../../store/useUserStore';
+import { sortAnnouncements } from '../../lib/announcementUtils';
 
 export default function Announcements() {
   const router = useRouter();
   const { dashboard, isLoading, fetchDashboardFromDjango } = useUserStore();
+  const [activeFilter, setActiveFilter] = useState('ALL');
+
+  const filters = ['ALL', 'Urgent', 'High Priority', 'Standard Information'];
+
+  const rawFiltered = dashboard?.announcements?.filter((ann: any) => {
+    if (activeFilter === 'ALL') return true;
+    return ann.priority === activeFilter;
+  }) || [];
+
+  const filteredAnnouncements = sortAnnouncements(rawFiltered);
 
   return (
     <ScrollView 
@@ -16,18 +28,39 @@ export default function Announcements() {
     >
       <View className="mb-6 mt-2">
         <Text className="text-3xl font-bold text-gray-900 mb-2">Announcements</Text>
-        <Text className="text-gray-500 text-sm leading-relaxed">
+        <Text className="text-gray-500 text-sm leading-relaxed mb-4">
           Stay updated with the latest news, events, and urgent alerts from your Barangay. Pull down to refresh.
         </Text>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row pb-2">
+          {filters.map((filter) => {
+            const isActive = activeFilter === filter;
+            return (
+              <TouchableOpacity
+                key={filter}
+                onPress={() => setActiveFilter(filter)}
+                className={`px-4 py-2 rounded-full mr-2 border ${
+                  isActive 
+                    ? 'bg-red-600 border-red-600' 
+                    : 'bg-white border-gray-200'
+                }`}
+              >
+                <Text className={`font-bold text-sm ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                  {filter === 'Standard Information' ? 'Standard' : filter.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View className="flex-col gap-5 mb-8">
-        {!dashboard?.announcements || dashboard.announcements.length === 0 ? (
+        {filteredAnnouncements.length === 0 ? (
           <View className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 items-center justify-center mt-4">
-            <Text className="text-gray-400 italic">-- No announcements at this time --</Text>
+            <Text className="text-gray-400 italic">-- No announcements found --</Text>
           </View>
         ) : (
-          dashboard.announcements.map((ann: any) => (
+          filteredAnnouncements.map((ann: any) => (
             <TouchableOpacity 
               key={ann.id} 
               onPress={() => router.push({ 
@@ -39,14 +72,14 @@ export default function Announcements() {
             >
               <View 
                 className="w-full h-1.5 absolute top-0 left-0 right-0" 
-                style={{ backgroundColor: ann.type === 'URGENT' ? '#EF4444' : (ann.type === 'PENSION' ? '#3B82F6' : (ann.type === 'EVENT' ? '#10B981' : '#DC2626')) }} 
+                style={{ backgroundColor: ann.priority === 'Urgent' ? '#EF4444' : (ann.priority === 'High Priority' ? '#F59E0B' : '#64748B') }} 
               />
               
               <View className="flex-row items-center gap-2 mb-4 mt-1">
-                {ann.type && (
-                  <View className={`px-2.5 py-1 rounded-lg ${ann.type === 'URGENT' ? 'bg-red-50' : (ann.type === 'PENSION' ? 'bg-blue-50' : (ann.type === 'EVENT' ? 'bg-emerald-50' : 'bg-gray-100'))}`}>
-                     <Text className={`text-[10px] font-bold uppercase tracking-wider ${ann.type === 'URGENT' ? 'text-red-600' : (ann.type === 'PENSION' ? 'text-blue-600' : (ann.type === 'EVENT' ? 'text-emerald-600' : 'text-gray-600'))}`}>
-                       {ann.type}
+                {ann.priority && (
+                  <View className={`px-2.5 py-1 rounded-lg ${ann.priority === 'Urgent' ? 'bg-red-50' : (ann.priority === 'High Priority' ? 'bg-amber-50' : 'bg-slate-50')}`}>
+                     <Text className={`text-[10px] font-bold uppercase tracking-wider ${ann.priority === 'Urgent' ? 'text-red-600' : (ann.priority === 'High Priority' ? 'text-amber-600' : 'text-slate-600')}`}>
+                       {ann.priority === 'Standard Information' ? 'STANDARD' : ann.priority}
                      </Text>
                   </View>
                 )}

@@ -9,6 +9,7 @@ import { useUserStore } from '../../store/useUserStore';
 import { supabase } from '../../lib/supabase';
 import Skeleton from '../../components/Skeleton'; 
 import { translations } from '../../lib/i18n'; 
+import { sortAnnouncements } from '../../lib/announcementUtils';
 
 const SUPABASE_PIC_URL = 'https://lukdudigghvsqizkukeq.supabase.co/storage/v1/object/public/profile-pictures/';
 
@@ -206,7 +207,7 @@ export default function Dashboard() {
              <Text className="text-gray-400 text-center flex-wrap">{t.noAnnouncements}</Text>
            </View>
         ) : (
-          dashboard.announcements.slice(0, 2).map((ann) => (
+          sortAnnouncements(dashboard.announcements).slice(0, 2).map((ann) => (
             <TouchableOpacity 
               key={ann.id} 
               onPress={() => router.push({ 
@@ -215,8 +216,18 @@ export default function Dashboard() {
               })}
               className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mb-4 overflow-hidden"
             >
-              <View className="w-full h-1 absolute top-0 left-0 right-0 bg-red-500" />
+              <View 
+                className="w-full h-1 absolute top-0 left-0 right-0" 
+                style={{ backgroundColor: ann.priority === 'Urgent' ? '#EF4444' : (ann.priority === 'High Priority' ? '#F59E0B' : '#64748B') }} 
+              />
               <View className="flex-row items-center gap-2 mb-2 mt-1">
+                {ann.priority && (
+                  <View className={`px-2 py-0.5 rounded ${ann.priority === 'Urgent' ? 'bg-red-50' : (ann.priority === 'High Priority' ? 'bg-amber-50' : 'bg-slate-50')}`}>
+                    <Text className={`text-[9px] font-bold uppercase tracking-wider ${ann.priority === 'Urgent' ? 'text-red-600' : (ann.priority === 'High Priority' ? 'text-amber-600' : 'text-slate-600')}`}>
+                      {ann.priority === 'Standard Information' ? 'STANDARD' : ann.priority}
+                    </Text>
+                  </View>
+                )}
                 <Text className="text-[10px] text-gray-400 font-medium">{ann.date}</Text>
               </View>
               <Text className="font-bold text-gray-900 text-sm mb-1 flex-wrap">{ann.title}</Text>

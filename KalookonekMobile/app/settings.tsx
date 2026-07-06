@@ -31,10 +31,14 @@ export default function Settings() {
     }
     
     const loadSecureSettings = async () => {
-      const pinStr = await SecureStore.getItemAsync('pin_enabled');
-      const bioStr = await SecureStore.getItemAsync('biometrics_enabled');
-      setPinEnabled(pinStr === 'true');
-      setBiometricsEnabled(bioStr === 'true');
+      try {
+        const pinStr = await SecureStore.getItemAsync('pin_enabled');
+        const bioStr = await SecureStore.getItemAsync('biometrics_enabled');
+        setPinEnabled(pinStr === 'true');
+        setBiometricsEnabled(bioStr === 'true');
+      } catch (error) {
+        console.error('Failed to load secure settings:', error);
+      }
     };
     loadSecureSettings();
   }, [user]);
@@ -71,26 +75,32 @@ export default function Settings() {
   };
 
   const handleBiometricToggle = async (val: boolean) => {
-    if (val) {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      
-      if (!hasHardware || !isEnrolled) {
-        Alert.alert('Unsupported', 'Your device does not support or have biometrics set up.');
-        return;
+    try {
+      if (val) {
+        const hasHardware = await LocalAuthentication.hasHardwareAsync();
+        const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+        
+        if (!hasHardware || !isEnrolled) {
+          Alert.alert('Unsupported', 'Your device does not support or have biometrics set up.');
+          return;
+        }
+        
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Enable Biometric Login',
+        });
+        
+        if (result.success) {
+          setBiometricsEnabled(true);
+          await SecureStore.setItemAsync('biometrics_enabled', 'true');
+        }
+      } else {
+        setBiometricsEnabled(false);
+        await SecureStore.deleteItemAsync('biometrics_enabled');
       }
-      
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Enable Biometric Login',
-      });
-      
-      if (result.success) {
-        setBiometricsEnabled(true);
-        await SecureStore.setItemAsync('biometrics_enabled', 'true');
-      }
-    } else {
-      setBiometricsEnabled(false);
-      await SecureStore.deleteItemAsync('biometrics_enabled');
+    } catch (error) {
+      console.error('Biometric toggle error:', error);
+      Alert.alert('Error', 'An error occurred while accessing secure settings.');
+      setBiometricsEnabled(!val); // Revert toggle
     }
   };
 
